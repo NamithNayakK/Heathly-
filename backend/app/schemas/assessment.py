@@ -18,6 +18,17 @@ class PHQ9Response(BaseModel):
     high_risk: bool
     recommended_action: str
     risk_probability: float | None = None
+    dominant_emotion: str | None = None
+    emotion_confidence: float | None = None
+    secondary_emotions: list[str] | None = None
+    concern_areas: list[str] | None = None
+    emotion_rationale: str | None = None
+    emotion_summary: str | None = None
+    needs_human_review: bool | None = None
+    risk_flags: list[str] | None = None
+    agent_version: str | None = None
+    mental_state_label: str | None = None
+    mental_state_confidence: float | None = None
     emotional_score: int | None = None
     cognitive_score: int | None = None
     physical_score: int | None = None

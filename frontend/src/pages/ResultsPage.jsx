@@ -48,6 +48,22 @@ export default function ResultsPage() {
   const score = result?.score || 0;
   const riskLevel = result?.risk_level || "Minimal";
   const recommendation = result?.recommended_action || "Keep tracking your wellbeing and maintain healthy routines.";
+  const dominantEmotion = result?.dominant_emotion || "stable";
+  const emotionConfidence = typeof result?.emotion_confidence === "number" ? Math.round(result.emotion_confidence * 100) : null;
+  const secondaryEmotions = Array.isArray(result?.secondary_emotions) ? result.secondary_emotions : [];
+  const concernAreas = Array.isArray(result?.concern_areas) ? result.concern_areas : [];
+  const emotionSummary = result?.emotion_summary || "Emotion patterns were inferred from PHQ-9 symptom clusters.";
+  const emotionRationale = result?.emotion_rationale || "No additional rationale available.";
+  const needsHumanReview = Boolean(result?.needs_human_review);
+  const riskFlags = Array.isArray(result?.risk_flags) ? result.risk_flags : [];
+  const agentVersion = result?.agent_version || null;
+  const mentalStateLabel = result?.mental_state_label || "stable";
+  const mentalStateConfidence = typeof result?.mental_state_confidence === "number" ? Math.round(result.mental_state_confidence * 100) : null;
+
+  const emotionalScore = typeof result?.emotional_score === "number" ? result.emotional_score : Math.min(score, 9);
+  const cognitiveScore = typeof result?.cognitive_score === "number" ? result.cognitive_score : Math.max(0, Math.min(score - 3, 9));
+  const physicalScore = typeof result?.physical_score === "number" ? result.physical_score : Math.max(0, Math.min(score - 6, 9));
+  const functionalScore = typeof result?.functional_score === "number" ? result.functional_score : Math.max(0, Math.min(score - 8, 9));
 
   const animatedScore = useAnimatedCount(score);
   const ringOffset = useMemo(() => {
@@ -105,29 +121,53 @@ export default function ResultsPage() {
       <section className="grid gap-4 md:grid-cols-2">
         <article className="card-glass text-slate-800">
           <p className="text-sm text-slate-500">Emotional</p>
-          <p className="mt-2 text-xl font-semibold">{Math.min(score, 9)} / 9</p>
+          <p className="mt-2 text-xl font-semibold">{emotionalScore} / 9</p>
           <Frown className="mt-3 h-5 w-5 text-indigo-600" />
         </article>
         <article className="card-glass text-slate-800">
           <p className="text-sm text-slate-500">Cognitive</p>
-          <p className="mt-2 text-xl font-semibold">{Math.max(0, Math.min(score - 3, 9))} / 9</p>
+          <p className="mt-2 text-xl font-semibold">{cognitiveScore} / 9</p>
           <ClipboardList className="mt-3 h-5 w-5 text-indigo-600" />
         </article>
         <article className="card-glass text-slate-800">
           <p className="text-sm text-slate-500">Physical</p>
-          <p className="mt-2 text-xl font-semibold">{Math.max(0, Math.min(score - 6, 9))} / 9</p>
+          <p className="mt-2 text-xl font-semibold">{physicalScore} / 9</p>
           <Meh className="mt-3 h-5 w-5 text-indigo-600" />
         </article>
         <article className="card-glass text-slate-800">
           <p className="text-sm text-slate-500">Functional</p>
-          <p className="mt-2 text-xl font-semibold">{Math.max(0, Math.min(score - 8, 9))} / 9</p>
+          <p className="mt-2 text-xl font-semibold">{functionalScore} / 9</p>
           <CheckCircle2 className="mt-3 h-5 w-5 text-indigo-600" />
         </article>
       </section>
 
       <section className="card-glass text-slate-800">
         <h2 className="text-xl font-semibold">AI Insights</h2>
-        <p className="mt-3 text-slate-600">Based on your responses, you may be experiencing stress patterns that would benefit from structured self-care and consistent support touchpoints.</p>
+        {needsHumanReview ? (
+          <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+            This assessment has complex or safety-sensitive signals. A clinician or trusted support person review is recommended.
+          </div>
+        ) : null}
+        <p className="mt-3 text-slate-600">{emotionSummary}</p>
+        <p className="mt-2 text-sm text-slate-500">Dominant emotion: <span className="font-semibold capitalize text-slate-700">{dominantEmotion}</span>{emotionConfidence !== null ? ` (${emotionConfidence}% confidence)` : ""}</p>
+        <p className="mt-2 text-sm text-slate-500">Mental state: <span className="font-semibold capitalize text-slate-700">{mentalStateLabel}</span>{mentalStateConfidence !== null ? ` (${mentalStateConfidence}% confidence)` : ""}</p>
+        <p className="mt-2 text-sm text-slate-500">{emotionRationale}</p>
+        {secondaryEmotions.length ? (
+          <p className="mt-2 text-sm text-slate-500">
+            Secondary signals: <span className="font-medium text-slate-700">{secondaryEmotions.join(", ")}</span>
+          </p>
+        ) : null}
+        {concernAreas.length ? (
+          <p className="mt-2 text-sm text-slate-500">
+            Concern areas: <span className="font-medium text-slate-700">{concernAreas.join(", ")}</span>
+          </p>
+        ) : null}
+        {riskFlags.length ? (
+          <p className="mt-2 text-sm text-slate-500">
+            Agent risk flags: <span className="font-medium text-slate-700">{riskFlags.join(", ")}</span>
+          </p>
+        ) : null}
+        {agentVersion ? <p className="mt-2 text-xs text-slate-400">Model: {agentVersion}</p> : null}
       </section>
 
       <section className="card-glass text-slate-800">

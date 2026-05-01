@@ -100,6 +100,11 @@ Frontend runs at `http://localhost:5173`.
 ### Emotion Analysis
 - `POST /api/v1/emotion/analyze` - Analyze text emotion (DistilBERT model)
 
+### Dataset-Driven ML Models
+- The backend can train a local BERT emotion model and an LSTM mental-state model from `mental_wellness_dataset_u.xlsx`.
+- From the `backend/` folder, run `python -m app.ml.train_models --dataset ..\\mental_wellness_dataset_u.xlsx` to generate the local artifacts in `backend/app/ml/artifacts/`.
+- When those artifacts exist, the live API prefers them over the fallback hosted emotion pipeline.
+
 ### AI Chat
 - `POST /api/v1/chat/message` - Send message, get CBT-based response with emotion analysis
 - `GET /api/v1/chat/history` - Get chat history (requires JWT)
