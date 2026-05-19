@@ -2,13 +2,14 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("token");
+  const { headers, ...rest } = options;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
+      ...(headers || {}),
     },
-    ...options,
+    ...rest,
   });
 
   if (!response.ok) {
@@ -24,7 +25,7 @@ export const api = {
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   me: () => request("/auth/me"),
   submitPHQ9: (answers) => request("/assessment/phq9", { method: "POST", body: JSON.stringify({ answers }) }),
-  getPHQ9History: () => request("/assessment/phq9/history"),
+  getPHQ9History: () => request("/assessment/phq9/history", { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }),
   sendMessage: (message) => request("/chat/message", { method: "POST", body: JSON.stringify({ message }) }),
   getChatHistory: () => request("/chat/history"),
   listForumPosts: () => request("/forum/posts"),

@@ -200,8 +200,18 @@ class PHQ9EmotionAgent:
             return "stable", 0.5, []
 
         top_emotion, top_score = ranked[0]
-        second_score = ranked[1][1] if len(ranked) > 1 else 0.0
-        confidence = min(max(0.50 + (top_score - second_score) / 3, 0.0), 0.99)
+        # Calculate actual confidence as the weighted average probability 
+        # (top_score is already the sum of weighted confidences).
+        total_weight_for_top = sum(weight_map.get(v.agent_name, 1.0) for v in votes if v.emotion == top_emotion)
+        
+        # Avoid division by zero, though unlikely
+        if total_weight_for_top > 0:
+            confidence = top_score / total_weight_for_top
+        else:
+            confidence = 0.50
+            
+        confidence = min(max(confidence, 0.0), 0.99)
+        
         secondary = [emotion for emotion, score in ranked[1:3] if score >= 0.6]
 
         return top_emotion, confidence, secondary

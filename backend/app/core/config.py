@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     secret_key: str = "change_me"
     access_token_expire_minutes: int = 60
     database_url: str = "sqlite:///./healthly.db"
-    cors_origins: str = "http://localhost:5173"
+    cors_origins: str = "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174"
     webhook_secret: str = "change_me_webhook_secret"
     n8n_webhook_url: str = "http://localhost:5678"
     redis_url: str = "redis://localhost:6379/0"

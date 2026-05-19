@@ -108,10 +108,10 @@ export default function DashboardPage() {
             ].map((item) => (
               <button
                 key={item.label}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-indigo-50"
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-slate-50"
                 onClick={() => navigate(item.path)}
               >
-                <item.icon className="h-4 w-4 text-indigo-600" />
+                <item.icon className="h-4 w-4 text-teal-600" />
                 {!collapsed && <span>{item.label}</span>}
               </button>
             ))}
@@ -159,12 +159,12 @@ export default function DashboardPage() {
                       />
                       <defs>
                         <linearGradient id="riskGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#667eea" />
-                          <stop offset="100%" stopColor="#764ba2" />
+                          <stop offset="0%" stopColor="#14b8a6" />
+                          <stop offset="100%" stopColor="#0f766e" />
                         </linearGradient>
                       </defs>
                     </svg>
-                    <div className="absolute inset-0 flex items-center justify-center text-lg font-bold text-indigo-700">{latest.score}</div>
+                    <div className="absolute inset-0 flex items-center justify-center text-lg font-bold text-teal-700">{latest.score}</div>
                   </div>
                   <div>
                     <p className="text-sm text-slate-500">Current status</p>
@@ -182,7 +182,7 @@ export default function DashboardPage() {
                   {["😢", "😕", "😐", "🙂", "😊"].map((face) => (
                     <button
                       key={face}
-                      className={`interactive-chip rounded-xl px-4 py-2 text-2xl ${mood === face ? "bg-indigo-100" : "bg-slate-100 hover:bg-slate-200"}`}
+                      className={`interactive-chip rounded-xl px-4 py-2 text-2xl ${mood === face ? "bg-teal-100" : "bg-slate-100 hover:bg-slate-200"}`}
                       onClick={() => setMood(face)}
                     >
                       {face}
@@ -203,7 +203,7 @@ export default function DashboardPage() {
                 <h2 className="text-xl font-semibold">Take a Deep Breath</h2>
                 <div className="mt-4 flex items-center gap-6">
                   <motion.div
-                    className="h-24 w-24 rounded-full bg-gradient-to-br from-cyan-300 to-indigo-500"
+                    className="h-24 w-24 rounded-full bg-teal-500"
                     animate={{ scale: breathingOn ? [1, 1.15, 1] : 1 }}
                     transition={{ repeat: breathingOn ? Infinity : 0, duration: 4 }}
                   />
