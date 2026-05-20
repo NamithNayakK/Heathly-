@@ -30,4 +30,30 @@ export const api = {
   getChatHistory: () => request("/chat/history"),
   listForumPosts: () => request("/forum/posts"),
   createForumPost: (payload) => request("/forum/posts", { method: "POST", body: JSON.stringify(payload) }),
+  
+  // Comprehensive multimodal assessment
+  submitHealthReport: (filename, raw_text) => 
+    request("/multimodal/report", { 
+      method: "POST", 
+      body: JSON.stringify({ filename, raw_text }) 
+    }),
+  submitSensorData: (sensorData) => 
+    request("/multimodal/sensor", { 
+      method: "POST", 
+      body: JSON.stringify(sensorData) 
+    }),
+  submitSessionAnalytics: (sessionData) => 
+    request("/multimodal/session", { 
+      method: "POST", 
+      body: JSON.stringify(sessionData) 
+    }),
+  getMultimodalDashboard: () => 
+    request("/multimodal/dashboard", { 
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } 
+    }),
+  submitComprehensiveAssessment: (assessmentData) => 
+    request("/multimodal/comprehensive-assessment", { 
+      method: "POST", 
+      body: JSON.stringify(assessmentData) 
+    }),
 };

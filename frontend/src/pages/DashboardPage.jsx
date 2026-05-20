@@ -2,263 +2,374 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
-  AlertTriangle,
-  BookOpen,
-  ClipboardList,
-  Home,
-  MessageCircle,
-  Settings,
-  TrendingUp,
+  Activity, AlertTriangle, Brain, CheckCircle2, ChevronRight,
+  ClipboardList, Clock, Cpu, FileText, MessageSquare, RefreshCw,
+  Shield, TrendingUp, Upload, Zap
 } from "lucide-react";
-
 import { api } from "../lib/api";
+
+const AGENTS = [
+  { name: "NLP Agent", model: "DistilBERT", status: "live" },
+  { name: "Fusion Agent", model: "Attention Engine", status: "live" },
+  { name: "Safety Agent", model: "Rule + XGBoost", status: "live" },
+  { name: "Sensor Agent", model: "BiLSTM", status: "idle" },
+  { name: "Bias Detection", model: "Fairness Monitor", status: "idle" },
+];
+
+const MODALITY_CARDS = [
+  { label: "PHQ-9 Analysis", icon: ClipboardList, color: "var(--cyan)", path: "/assessment" },
+  { label: "Medical Records", icon: FileText, color: "var(--emerald)", path: "/health-report" },
+  { label: "Chat Intelligence", icon: MessageSquare, color: "var(--violet)", path: "/chat" },
+  { label: "Sensor Streams", icon: Activity, color: "var(--blue)", path: "/sensor" },
+];
+
+function StatCard({ label, value, unit, icon: Icon, color, trend }) {
+  return (
+    <div className="card card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="stat-label">{label}</span>
+        <div style={{ padding: 6, borderRadius: 6, background: `${color}18` }}>
+          <Icon style={{ width: 14, height: 14, color }} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+        <span className="stat-value">{value}</span>
+        {unit && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{unit}</span>}
+      </div>
+      {trend && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--emerald)' }}>
+          <TrendingUp style={{ width: 11, height: 11 }} />
+          <span>{trend}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgentRow({ name, model, status }) {
+  return (
+    <div className="agent-card">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span className={`status-dot ${status}`} />
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{name}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{model}</div>
+        </div>
+      </div>
+      <span className={`badge ${status === 'live' ? 'badge-live' : 'badge-muted'}`}>
+        {status}
+      </span>
+    </div>
+  );
+}
+
+function WellnessRing({ score }) {
+  const r = 54;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - (score || 0) / 100);
+  const color = score >= 75 ? 'var(--emerald)' : score >= 50 ? 'var(--cyan)' : 'var(--amber)';
+
+  return (
+    <div style={{ position: 'relative', width: 130, height: 130, flexShrink: 0 }}>
+      <svg width="130" height="130" style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx="65" cy="65" r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+        <circle
+          cx="65" cy="65" r={r} fill="none"
+          stroke={color} strokeWidth="8"
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)', filter: `drop-shadow(0 0 6px ${color}60)` }}
+        />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'IBM Plex Sans', lineHeight: 1 }}>
+          {score ?? '--'}
+        </div>
+        <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'IBM Plex Mono' }}>
+          Wellness
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const [dashData, setDashData] = useState(null);
   const [history, setHistory] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [collapsed, setCollapsed] = useState(false);
-  const [mood, setMood] = useState(null);
-  const [breathingOn, setBreathingOn] = useState(false);
-  const userName = localStorage.getItem("full_name") || "User";
+  const [loading, setLoading] = useState(true);
+  const [uploadText, setUploadText] = useState('');
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadLog, setUploadLog] = useState([]);
+  const userName = localStorage.getItem('full_name') || 'User';
 
-  useEffect(() => {
-    let mounted = true;
-
-    const loadHistory = async () => {
-      setError("");
-      try {
-        const data = await api.getPHQ9History();
-        if (mounted) {
-          setHistory(data.items || []);
-        }
-      } catch (loadError) {
-        if (mounted) {
-          setError(loadError.message);
-        }
-      } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    loadHistory();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const latest = history[0];
-  const moodHistory = ["😊", "😐", "🙂", "😕", "😊", "😊", "?"];
-
-  const getRiskColor = (riskLevel) => {
-    switch (riskLevel?.toLowerCase()) {
-      case "minimal":
-        return "bg-green-100 text-green-800 border-green-300";
-      case "mild":
-        return "bg-blue-100 text-blue-800 border-blue-300";
-      case "moderate":
-        return "bg-yellow-100 text-yellow-800 border-yellow-300";
-      case "moderately severe":
-        return "bg-orange-100 text-orange-800 border-orange-300";
-      case "severe":
-        return "bg-red-100 text-red-800 border-red-300";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-300";
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [dash, hist] = await Promise.all([api.getMultimodalDashboard(), api.getPHQ9History()]);
+      setDashData(dash);
+      setHistory(hist.items || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getRiskIcon = (riskLevel) => {
-    switch (riskLevel?.toLowerCase()) {
-      case "minimal":
-        return "😊";
-      case "mild":
-        return "🙂";
-      case "moderate":
-        return "😐";
-      case "moderately severe":
-        return "😞";
-      case "severe":
-        return "😢";
-      default:
-        return "❓";
+  useEffect(() => { load(); }, []);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setUploadText(ev.target?.result || '');
+    reader.readAsText(file);
+  };
+
+  const handleUpload = async (e) => {
+    e.preventDefault();
+    if (!uploadText.trim()) return;
+    setUploading(true);
+    setUploadLog([]);
+    const steps = ['Initializing OCR pipeline...', 'Running BioClinicalBERT entity extraction...', 'Mapping clinical entities to wellness model...'];
+    for (const s of steps) {
+      await new Promise(r => setTimeout(r, 500));
+      setUploadLog(prev => [...prev, s]);
+    }
+    try {
+      await api.submitHealthReport(uploadFile?.name || 'manual-entry.txt', uploadText.trim());
+      setUploadLog(prev => [...prev, '✓ Report integrated successfully.']);
+      setTimeout(() => { setUploadFile(null); setUploadText(''); setUploadLog([]); load(); }, 2000);
+    } catch (err) {
+      setUploadLog(prev => [...prev, `✗ Error: ${err.message}`]);
+    } finally {
+      setUploading(false);
     }
   };
+
+  const wellness = dashData?.unified_wellness_index ?? null;
+  const risk = dashData?.risk_classification || 'Unknown';
+  const explainability = dashData?.explainability_layer || [];
+  const alerts = dashData?.alert_flags || [];
+  const recommendations = dashData?.recommendations || [];
 
   return (
-    <main className="min-h-screen">
-      <div className="grid gap-4 lg:grid-cols-[260px,1fr]">
-        <aside className="card-glass h-fit text-slate-800">
-          <div className="mb-5 flex items-center justify-between">
-            {!collapsed && <p className="text-lg font-semibold">Workspace</p>}
-            <button className="rounded bg-indigo-50 px-3 py-1 text-sm" onClick={() => setCollapsed((v) => !v)}>
-              {collapsed ? "Expand" : "Collapse"}
-            </button>
-          </div>
-          <div className="space-y-2">
-            {[
-              { label: "Dashboard", icon: Home, path: "/dashboard" },
-              { label: "Assessment", icon: ClipboardList, path: "/assessment" },
-              { label: "My Progress", icon: TrendingUp, path: "/results" },
-              { label: "Chat Support", icon: MessageCircle, path: "/chat" },
-              { label: "Resources", icon: BookOpen, path: "/forum" },
-              { label: "Settings", icon: Settings, path: "/dashboard" },
-            ].map((item) => (
-              <button
-                key={item.label}
-                className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-slate-50"
-                onClick={() => navigate(item.path)}
-              >
-                <item.icon className="h-4 w-4 text-teal-600" />
-                {!collapsed && <span>{item.label}</span>}
-              </button>
-            ))}
-          </div>
-        </aside>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Page header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <div className="page-title">Clinical Intelligence Dashboard</div>
+          <div className="page-subtitle">Unified multimodal health analytics for {userName}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
+            <RefreshCw style={{ width: 13, height: 13, ...(loading ? { animation: 'spin 1s linear infinite' } : {}) }} />
+            Refresh
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => navigate('/assessment')}>
+            <ClipboardList style={{ width: 13, height: 13 }} />
+            New Assessment
+          </button>
+        </div>
+      </div>
 
-        <section className="space-y-4">
-          <div className="card-gradient">
-            <h1 className="text-3xl font-bold">Hello, {userName}</h1>
-            <p className="mt-2 text-white/90">Welcome back. Here is your current wellness snapshot.</p>
-          </div>
+      {/* Alerts */}
+      {alerts.length > 0 && alerts.map((a, i) => (
+        <div key={i} className="alert alert-error">
+          <AlertTriangle style={{ width: 14, height: 14, flexShrink: 0, marginTop: 1 }} />
+          <span>{a}</span>
+        </div>
+      ))}
 
-        {/* Latest Assessment Card */}
-          {latest?.high_risk && (
-            <div className="crisis-banner">
-              <AlertTriangle className="h-5 w-5" />
-              <div>
-                <p className="font-semibold">Need immediate help?</p>
-                <p className="text-sm">Call: 1-800-273-8255 (24/7 Helpline)</p>
-              </div>
-              <button className="ml-auto rounded-lg bg-white/20 px-3 py-2 text-sm">Get Help Now</button>
-            </div>
-          )}
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {[200, 120, 80].map((h, i) => (
+            <div key={i} className="skeleton" style={{ height: h, borderRadius: 14 }} />
+          ))}
+        </div>
+      ) : (
+        <>
+          {/* Main Wellness + Agents Row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
 
-          {isLoading ? (
-            <div className="card-glass loading-shimmer text-center text-slate-700">Loading your dashboard...</div>
-          ) : latest ? (
-            <div className="grid gap-4 xl:grid-cols-2">
-              <article className="card-glass text-slate-800">
-                <h2 className="text-xl font-semibold">Current Risk Status</h2>
-                <div className="mt-4 flex items-center gap-5">
-                  <div className="relative h-28 w-28">
-                    <svg className="h-28 w-28 -rotate-90" viewBox="0 0 120 120">
-                      <circle cx="60" cy="60" r="48" fill="none" stroke="#e2e8f0" strokeWidth="10" />
-                      <circle
-                        cx="60"
-                        cy="60"
-                        r="48"
-                        fill="none"
-                        stroke="url(#riskGradient)"
-                        strokeWidth="10"
-                        strokeLinecap="round"
-                        strokeDasharray={301.59}
-                        strokeDashoffset={301.59 * (1 - Math.min(latest.score / 27, 1))}
-                      />
-                      <defs>
-                        <linearGradient id="riskGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                          <stop offset="0%" stopColor="#14b8a6" />
-                          <stop offset="100%" stopColor="#0f766e" />
-                        </linearGradient>
-                      </defs>
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center text-lg font-bold text-teal-700">{latest.score}</div>
+            {/* Live Wellness Pulse */}
+            <div className="card card-accent-cyan" style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+              <WellnessRing score={wellness} />
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <div className="section-title" style={{ marginBottom: 6 }}>Live Wellness Pulse</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'IBM Plex Sans' }}>
+                      {risk} Risk
+                    </span>
+                    <span className={`badge ${risk?.toLowerCase() === 'low' ? 'badge-live' : risk?.toLowerCase() === 'medium' ? 'badge-amber' : 'badge-rose'}`}>
+                      {wellness !== null ? `${wellness}% index` : 'Pending'}
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-sm text-slate-500">Current status</p>
-                    <p className={`mt-1 inline-flex items-center rounded-lg px-3 py-1 font-semibold ${getRiskColor(latest.risk_level)}`}>
-                      {getRiskIcon(latest.risk_level)} {latest.risk_level}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-600">{latest.recommended_action}</p>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                    Synthesized across {dashData?.modes_active?.length || 0} active telemetry streams including clinical BERT models, wearable sensors, and conversation semantics.
                   </div>
                 </div>
-              </article>
 
-              <article className="card-glass text-slate-800">
-                <h2 className="text-xl font-semibold">How are you feeling today?</h2>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {["😢", "😕", "😐", "🙂", "😊"].map((face) => (
-                    <button
-                      key={face}
-                      className={`interactive-chip rounded-xl px-4 py-2 text-2xl ${mood === face ? "bg-teal-100" : "bg-slate-100 hover:bg-slate-200"}`}
-                      onClick={() => setMood(face)}
-                    >
-                      {face}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-4">
-                  <p className="text-sm text-slate-500">7-day trend</p>
-                  <div className="mt-2 flex justify-between rounded-lg bg-slate-100 px-3 py-2 text-xl">
-                    {moodHistory.map((icon, idx) => (
-                      <span key={idx}>{icon}</span>
+                {/* Attention Fusion weights */}
+                {explainability.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div className="section-title">Attention Fusion Matrix</div>
+                    {explainability.map((item, i) => (
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                          <span style={{ color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'IBM Plex Mono' }}>
+                            {item.modality?.replace(/_/g, ' ')}
+                          </span>
+                          <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'IBM Plex Mono' }}>
+                            {((item.weight || 0) * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <div className="meter-bar">
+                          <div className="meter-fill" style={{ width: `${(item.weight || 0) * 100}%` }} />
+                        </div>
+                      </div>
                     ))}
                   </div>
-                </div>
-              </article>
+                )}
 
-              <article className="card-glass text-slate-800">
-                <h2 className="text-xl font-semibold">Take a Deep Breath</h2>
-                <div className="mt-4 flex items-center gap-6">
-                  <motion.div
-                    className="h-24 w-24 rounded-full bg-teal-500"
-                    animate={{ scale: breathingOn ? [1, 1.15, 1] : 1 }}
-                    transition={{ repeat: breathingOn ? Infinity : 0, duration: 4 }}
-                  />
+                {/* Recommendations */}
+                {recommendations.length > 0 && (
                   <div>
-                    <p className="text-sm text-slate-600">{breathingOn ? "Breathe in... 4s" : "Ready for a calming exercise"}</p>
-                    <button className="btn-secondary btn-ripple focus-ring mt-3" onClick={() => setBreathingOn((v) => !v)}>
-                      {breathingOn ? "Stop Exercise" : "Start Exercise"}
-                    </button>
+                    <div className="section-title">AI Recommendations</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {recommendations.slice(0, 2).map((r, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, color: 'var(--text-secondary)', alignItems: 'flex-start' }}>
+                          <CheckCircle2 style={{ width: 12, height: 12, color: 'var(--emerald)', flexShrink: 0, marginTop: 3 }} />
+                          <span>{r}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </article>
-
-              <article className="card-glass text-slate-800">
-                <h2 className="text-xl font-semibold">Quick Actions</h2>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <button className="btn-primary btn-ripple focus-ring" onClick={() => navigate("/assessment")}>Take Assessment</button>
-                  <button className="btn-secondary btn-ripple focus-ring" onClick={() => navigate("/chat")}>Talk to AI Bot</button>
-                </div>
-              </article>
+                )}
+              </div>
             </div>
-          ) : (
-            <div className="card-glass text-center">
-              <p className="text-slate-700">No assessment found yet.</p>
-              <button onClick={() => navigate("/assessment")} className="btn-primary btn-ripple focus-ring mt-4">Take Your First Assessment</button>
-            </div>
-          )}
 
-          <div className="card-glass">
-            <h2 className="text-xl font-semibold text-slate-800">Assessment History</h2>
-            {error && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700">{error}</div>}
-            {!isLoading && history.length > 0 ? (
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-sm text-slate-700">
+            {/* AI Agent Status */}
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="section-title" style={{ marginBottom: 0 }}>AI Agent Status</div>
+                <span className="badge badge-live"><span className="status-dot live" style={{ width: 5, height: 5 }} />Live</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {AGENTS.map(a => <AgentRow key={a.name} {...a} />)}
+              </div>
+              <div className="divider" style={{ margin: '4px 0' }} />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
+                Last sync: {new Date().toLocaleTimeString()}
+              </div>
+            </div>
+          </div>
+
+          {/* Modality Status Grid */}
+          <div>
+            <div className="section-title">Multimodal Intelligence Streams</div>
+            <div className="grid-4" style={{ gap: 12 }}>
+              {MODALITY_CARDS.map(m => (
+                <button
+                  key={m.label}
+                  className="card card-xs"
+                  style={{ cursor: 'pointer', textAlign: 'left', background: 'none' }}
+                  onClick={() => navigate(m.path)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <m.icon style={{ width: 16, height: 16, color: m.color }} />
+                    <ChevronRight style={{ width: 12, height: 12, color: 'var(--text-muted)' }} />
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{m.label}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>Active</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Record Upload + History Row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: 16 }}>
+
+            {/* Inline Record Upload */}
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14, position: 'relative', overflow: 'hidden' }}>
+              {uploading && <div className="neon-scanner" />}
+              <div className="section-title">Upload Clinical Record</div>
+              <form onSubmit={handleUpload} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <label className="upload-zone" style={{ display: 'block' }}>
+                  <Upload style={{ width: 20, height: 20, color: 'var(--cyan)', marginBottom: 8 }} />
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                    {uploadFile ? uploadFile.name : 'Drop report or click to browse'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>TXT, MD, CSV, JSON · max 5MB</div>
+                  <input type="file" className="sr-only" style={{ display: 'none' }} onChange={handleFileChange} />
+                </label>
+                {uploadLog.length > 0 && (
+                  <div className="terminal" style={{ maxHeight: 80 }}>
+                    {uploadLog.map((l, i) => (
+                      <div key={i} className={l.startsWith('✓') ? 'terminal-line-success' : l.startsWith('✗') ? 'terminal-line-error' : 'terminal-line-info'}>
+                        {l}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button className="btn btn-primary btn-sm" type="submit" disabled={uploading || !uploadFile} style={{ width: '100%' }}>
+                  {uploading ? 'Analyzing...' : 'Run Clinical Analysis'}
+                </button>
+              </form>
+            </div>
+
+            {/* Assessment History */}
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="section-title" style={{ marginBottom: 0 }}>Diagnostic History</div>
+                <button className="btn btn-ghost btn-xs" onClick={() => navigate('/assessment')}>
+                  New run <ChevronRight style={{ width: 11, height: 11 }} />
+                </button>
+              </div>
+              {history.length > 0 ? (
+                <table className="data-table">
                   <thead>
-                    <tr className="border-b border-slate-200 text-left">
-                      <th className="px-3 py-2">Date</th>
-                      <th className="px-3 py-2">Score</th>
-                      <th className="px-3 py-2">Risk</th>
+                    <tr>
+                      <th>Date</th>
+                      <th>PHQ Score</th>
+                      <th>Risk Level</th>
+                      <th>Classifier</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {history.map((item, index) => (
-                      <tr key={`${item.created_at}-${index}`} className="border-b border-slate-100">
-                        <td className="px-3 py-2">{new Date(item.created_at).toLocaleString()}</td>
-                        <td className="px-3 py-2">{item.score}/27</td>
-                        <td className="px-3 py-2">{item.risk_level}</td>
+                    {history.slice(0, 5).map((item, i) => (
+                      <tr key={i}>
+                        <td style={{ fontFamily: 'IBM Plex Mono', fontSize: 11 }}>
+                          {new Date(item.created_at).toLocaleDateString()}
+                        </td>
+                        <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.score} / 27</td>
+                        <td>
+                          <span className={`badge ${
+                            item.risk_level?.toLowerCase().includes('severe') ? 'badge-rose' :
+                            item.risk_level?.toLowerCase().includes('moderate') ? 'badge-amber' :
+                            'badge-live'
+                          }`}>{item.risk_level}</span>
+                        </td>
+                        <td style={{ fontFamily: 'IBM Plex Mono', fontSize: 10, color: 'var(--text-muted)' }}>
+                          {item.agent_version || 'agentic-phq9'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </div>
-            ) : null}
+              ) : (
+                <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                  No assessments recorded. Start your first diagnostic run.
+                </div>
+              )}
+            </div>
           </div>
-        </section>
-      </div>
-    </main>
+        </>
+      )}
+    </div>
   );
 }

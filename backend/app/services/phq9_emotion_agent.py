@@ -90,7 +90,7 @@ class PHQ9EmotionAgent:
         )
 
     def _planner(self, answers: list[int]) -> list[str]:
-        plan = ["symptom-pattern-agent", "functional-impact-agent", "nlp-evidence-agent"]
+        plan = ["symptom-pattern-agent", "functional-impact-agent", "nlp-evidence-agent", "xgboost-risk-agent"]
         if answers[8] >= 1 or sum(answers) >= 15:
             plan.append("safety-agent")
         return plan
@@ -104,10 +104,36 @@ class PHQ9EmotionAgent:
             votes.append(self._functional_impact_agent(answers))
         if "nlp-evidence-agent" in plan:
             votes.append(self._nlp_evidence_agent(answers, concern_areas))
+        if "xgboost-risk-agent" in plan:
+            votes.append(self._xgboost_risk_agent(answers))
         if "safety-agent" in plan:
             votes.append(self._safety_agent(answers))
 
         return votes
+
+    def _xgboost_risk_agent(self, answers: list[int]) -> AgentVote:
+        from app.services.risk_classifier import classify_assessment_risk
+        
+        total = sum(answers)
+        risk_pred = classify_assessment_risk(answers, total)
+        
+        # XGBoost output drives agentic vote:
+        if risk_pred.high_risk or risk_pred.probability >= 0.75:
+            emotion = "sadness" if answers[8] >= 1 else "overwhelm"
+            confidence = float(risk_pred.probability)
+        elif risk_pred.tier == "medium" or risk_pred.probability >= 0.45:
+            emotion = "overwhelm"
+            confidence = float(risk_pred.probability)
+        else:
+            emotion = "stable"
+            confidence = float(1.0 - risk_pred.probability)
+            
+        evidence = [
+            f"XGBoost risk model source={risk_pred.model_source}",
+            f"risk probability={risk_pred.probability:.4f}",
+            f"classified tier={risk_pred.tier}"
+        ]
+        return AgentVote("xgboost-risk-agent", emotion, confidence, evidence)
 
     def _symptom_pattern_agent(self, answers: list[int]) -> AgentVote:
         sadness_signal = answers[1] + answers[0] + answers[8]
@@ -188,6 +214,7 @@ class PHQ9EmotionAgent:
             "symptom-pattern-agent": 1.0,
             "functional-impact-agent": 0.9,
             "nlp-evidence-agent": 1.15,
+            "xgboost-risk-agent": 1.2,
             "safety-agent": 1.3,
         }
         score_accumulator: dict[str, float] = {}

@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
-from transformers import BertForSequenceClassification, BertTokenizerFast
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from app.ml.dataset_utils import label_lookup, load_survey_samples, split_samples
 from app.ml.mental_state_model import MentalStateLSTM, save_mental_state_model
@@ -54,7 +54,7 @@ def train_bert_emotion_model(samples, output_dir: Path, epochs: int, batch_size:
     emotion_labels, id2emotion = label_lookup(sample.emotion_label for sample in samples)
     train_samples, val_samples = split_samples(samples)
 
-    tokenizer = BertTokenizerFast.from_pretrained("distilbert-base-uncased")
+    tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
     print("  Tokenizing train texts...", flush=True)
     train_texts = [sample.text for sample in train_samples]
     val_texts = [sample.text for sample in val_samples]
@@ -71,7 +71,7 @@ def train_bert_emotion_model(samples, output_dir: Path, epochs: int, batch_size:
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
 
     print("  Loading DistilBERT model...", flush=True)
-    model = BertForSequenceClassification.from_pretrained(
+    model = AutoModelForSequenceClassification.from_pretrained(
         "distilbert-base-uncased",
         num_labels=len(emotion_labels),
         id2label=id2emotion,
@@ -172,6 +172,50 @@ def train_lstm_mental_state_model(samples, output_dir: Path, epochs: int, batch_
     return metadata
 
 
+def train_xgboost_risk_model(samples, output_dir: Path) -> dict[str, object]:
+    import xgboost as xgb
+    import numpy as np
+    from sklearn.model_selection import train_test_split
+
+    print("  Preparing dataset for XGBoost...", flush=True)
+    X = np.array([sample.answers for sample in samples], dtype=np.float32)
+    # Target label: 1 if high risk, 0 otherwise
+    # Clinical standard for high risk: total score >= 15 or self-harm thoughts >= 1
+    y = np.array([1 if (sum(sample.answers) >= 15 or sample.answers[8] >= 1) else 0 for sample in samples], dtype=np.int32)
+
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    print(f"  Training XGBoost Classifier on {len(X_train)} samples...", flush=True)
+    model = xgb.XGBClassifier(
+        n_estimators=100,
+        max_depth=3,
+        learning_rate=0.08,
+        eval_metric="logloss",
+        random_state=42
+    )
+    model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
+
+    print("  Saving XGBoost model...", flush=True)
+    model_path = output_dir / "xgboost_risk_model.json"
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    model.save_model(str(model_path))
+
+    # Evaluate on validation split
+    val_preds = model.predict(X_val)
+    accuracy = float(np.mean(val_preds == y_val))
+    print(f"  XGBoost Validation Accuracy: {accuracy:.4f}", flush=True)
+
+    metadata = {
+        "task": "risk_classification",
+        "model": "xgboost_classifier",
+        "dataset": "mental_wellness_dataset_u.xlsx",
+        "validation_accuracy": accuracy,
+        "samples": len(samples),
+    }
+    (output_dir / "xgboost_risk_metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    return metadata
+
+
 def main() -> None:
     print("Starting training pipeline...", flush=True)
     args = parse_args()
@@ -191,7 +235,15 @@ def main() -> None:
     mental_metadata = train_lstm_mental_state_model(samples, output_dir, args.epochs, args.batch_size)
     print("LSTM training complete!", flush=True)
 
-    summary = {"emotion": emotion_metadata, "mental_state": mental_metadata}
+    print("Training XGBoost risk classification model...", flush=True)
+    xgboost_metadata = train_xgboost_risk_model(samples, output_dir)
+    print("XGBoost training complete!", flush=True)
+
+    summary = {
+        "emotion": emotion_metadata,
+        "mental_state": mental_metadata,
+        "risk_classification": xgboost_metadata
+    }
     (output_dir / "training_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
 
