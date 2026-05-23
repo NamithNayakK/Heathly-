@@ -12,6 +12,7 @@ import HealthReportPage from "./pages/HealthReportPage";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import ResultsPage from "./pages/ResultsPage";
+import SensorPage from "./pages/SensorPage";
 
 function AppShell({ children }) {
   return (
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         <Route path="/assessment" element={<ProtectedRoute><AssessmentPage /></ProtectedRoute>} />
         <Route path="/health-report" element={<ProtectedRoute><HealthReportPage /></ProtectedRoute>} />
+        <Route path="/sensor" element={<ProtectedRoute><SensorPage /></ProtectedRoute>} />
         <Route path="/comprehensive-assessment" element={<ProtectedRoute><ComprehensiveAssessmentPage /></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/forum" element={<ProtectedRoute><ForumPage /></ProtectedRoute>} />

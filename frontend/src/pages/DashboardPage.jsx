@@ -4,17 +4,9 @@ import { motion } from "framer-motion";
 import {
   Activity, AlertTriangle, Brain, CheckCircle2, ChevronRight,
   ClipboardList, Clock, Cpu, FileText, MessageSquare, RefreshCw,
-  Shield, TrendingUp, Upload, Zap
+  Shield, TrendingUp, Upload, Zap, Battery, Heart, Radio
 } from "lucide-react";
 import { api } from "../lib/api";
-
-const AGENTS = [
-  { name: "NLP Agent", model: "DistilBERT", status: "live" },
-  { name: "Fusion Agent", model: "Attention Engine", status: "live" },
-  { name: "Safety Agent", model: "Rule + XGBoost", status: "live" },
-  { name: "Sensor Agent", model: "BiLSTM", status: "idle" },
-  { name: "Bias Detection", model: "Fairness Monitor", status: "idle" },
-];
 
 const MODALITY_CARDS = [
   { label: "PHQ-9 Analysis", icon: ClipboardList, color: "var(--cyan)", path: "/assessment" },
@@ -42,23 +34,6 @@ function StatCard({ label, value, unit, icon: Icon, color, trend }) {
           <span>{trend}</span>
         </div>
       )}
-    </div>
-  );
-}
-
-function AgentRow({ name, model, status }) {
-  return (
-    <div className="agent-card">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span className={`status-dot ${status}`} />
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{name}</div>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{model}</div>
-        </div>
-      </div>
-      <span className={`badge ${status === 'live' ? 'badge-live' : 'badge-muted'}`}>
-        {status}
-      </span>
     </div>
   );
 }
@@ -104,6 +79,10 @@ export default function DashboardPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadLog, setUploadLog] = useState([]);
   const userName = localStorage.getItem('full_name') || 'User';
+  
+  // Bluetooth Wearable status states
+  const [bleStatus, setBleStatus] = useState({ connected: false, device: null });
+  const [liveTelemetry, setLiveTelemetry] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -118,7 +97,37 @@ export default function DashboardPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { 
+    load(); 
+    
+    // Connect live dashboard Bluetooth WebSocket stream if active
+    let ws = null;
+    const initBle = async () => {
+      try {
+        const res = await api.getBluetoothStatus();
+        setBleStatus(res);
+        if (res.connected) {
+          const wsUrl = api.getBluetoothStreamUrl();
+          ws = new WebSocket(wsUrl);
+          ws.onmessage = (e) => {
+            try {
+              const data = JSON.parse(e.data);
+              setLiveTelemetry(data);
+            } catch (err) {
+              console.error("Dashboard BLE WS parsing error:", err);
+            }
+          };
+        }
+      } catch (err) {
+        console.error("Failed to fetch Bluetooth status on dashboard mount:", err);
+      }
+    };
+    initBle();
+    
+    return () => {
+      if (ws) ws.close();
+    };
+  }, []);
 
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -192,7 +201,7 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* Main Wellness + Agents Row */}
+          {/* Main Wellness Row */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
 
             {/* Live Wellness Pulse */}
@@ -253,20 +262,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* AI Agent Status */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div className="section-title" style={{ marginBottom: 0 }}>AI Agent Status</div>
-                <span className="badge badge-live"><span className="status-dot live" style={{ width: 5, height: 5 }} />Live</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {AGENTS.map(a => <AgentRow key={a.name} {...a} />)}
-              </div>
-              <div className="divider" style={{ margin: '4px 0' }} />
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
-                Last sync: {new Date().toLocaleTimeString()}
-              </div>
-            </div>
           </div>
 
           {/* Modality Status Grid */}
@@ -289,6 +284,150 @@ export default function DashboardPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Dedicated Physiological Intelligence Console Overview */}
+          <div className="card card-accent-rose" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ padding: 6, borderRadius: 6, background: 'rgba(244,63,94,0.1)', color: 'var(--rose)' }}>
+                  <Activity style={{ width: 16, height: 16, animation: bleStatus.connected ? 'pulse 2s infinite' : 'none' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Physiological Intelligence Console</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Real-time wearable sensor stream ingestion status</div>
+                </div>
+              </div>
+              
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span className={`badge ${bleStatus.connected ? 'badge-live' : 'badge-muted'}`} style={{ fontSize: 9 }}>
+                  <span className={`status-dot ${bleStatus.connected ? 'live' : 'idle'}`} style={{ width: 5, height: 5 }} />
+                  {bleStatus.connected ? (bleStatus.is_mocked ? 'Emulator active' : 'Wearable online') : 'Offline'}
+                </span>
+                <button className="btn btn-primary btn-xs" onClick={() => navigate('/sensor')}>
+                  Launch Console <ChevronRight style={{ width: 11, height: 11 }} />
+                </button>
+              </div>
+            </div>
+
+            {bleStatus.connected ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr 1fr', gap: 16, alignItems: 'center' }}>
+                
+                {/* 1. Connected Device & Live Telemetry values */}
+                <div className="card card-xs" style={{ background: 'var(--bg-elevated)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {bleStatus.device?.name || 'Smart Wearable'}
+                    </span>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Battery style={{ width: 12, height: 12, color: 'var(--emerald)' }} />
+                      {bleStatus.battery_level || liveTelemetry?.device_status?.battery_level || 90}%
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Heart style={{ width: 16, height: 16, color: 'var(--rose)', fill: 'var(--rose)', animation: 'pulse 1s infinite' }} />
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                        <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'IBM Plex Sans' }}>
+                          {liveTelemetry?.telemetry?.heart_rate || 76}
+                        </span>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>BPM</span>
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                      <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono' }}>HRV</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }}>
+                        {liveTelemetry?.telemetry?.heart_rate_variability || 54} ms
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--bg-border)', paddingTop: 4 }}>
+                    <span>SpO2: {liveTelemetry?.telemetry?.spo2 || 98}%</span>
+                    <span>Steps: {liveTelemetry?.telemetry?.steps?.toLocaleString() || 4320}</span>
+                  </div>
+                </div>
+
+                {/* 2. BiLSTM Stress Inferences */}
+                <div className="card card-xs" style={{ background: 'var(--bg-elevated)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono' }}>
+                      BiLSTM Stress Score
+                    </span>
+                    <span className={`badge ${
+                      (liveTelemetry?.ai_analysis?.risk_classification || 'Low').toLowerCase() === 'high' ? 'badge-rose' :
+                      (liveTelemetry?.ai_analysis?.risk_classification || 'Low').toLowerCase() === 'medium' ? 'badge-amber' :
+                      'badge-live'
+                    }`} style={{ fontSize: 8 }}>
+                      {liveTelemetry?.ai_analysis?.risk_classification || 'Low'} Risk
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'IBM Plex Sans', width: 65 }}>
+                      {Math.round((liveTelemetry?.ai_analysis?.stress_index || 0.34) * 100)}%
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div className="meter-bar" style={{ height: 5 }}>
+                        <div
+                          className={`meter-fill ${
+                            (liveTelemetry?.ai_analysis?.stress_index || 0.34) >= 0.70 ? 'rose' :
+                            (liveTelemetry?.ai_analysis?.stress_index || 0.34) >= 0.40 ? 'amber' :
+                            'emerald'
+                          }`}
+                          style={{ width: `${(liveTelemetry?.ai_analysis?.stress_index || 0.34) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.4, height: 28, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                    {liveTelemetry?.ai_analysis?.stress_pattern || 'Stable autonomic recovery; baseline metrics optimal.'}
+                  </div>
+                </div>
+
+                {/* 3. Fusion contribution */}
+                <div className="card card-xs" style={{ background: 'var(--bg-elevated)', display: 'flex', flexDirection: 'column', gap: 6, height: '100%', justifyContent: 'center' }}>
+                  <span style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono', display: 'block' }}>
+                    Fusion Matrix Weight
+                  </span>
+                  
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                    <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'IBM Plex Sans' }}>
+                      {Math.round((liveTelemetry?.fusion_contribution?.sensor_weight || 0.30) * 100)}%
+                    </span>
+                  </div>
+
+                  <div className="meter-bar" style={{ height: 3 }}>
+                    <div className="meter-fill violet" style={{ width: `${(liveTelemetry?.fusion_contribution?.sensor_weight || 0.30) * 100}%` }} />
+                  </div>
+
+                  <span style={{
+                    fontSize: 9,
+                    color: (liveTelemetry?.fusion_contribution?.sensor_contribution || 'positive_influence') === 'positive_influence' ? 'var(--emerald)' : 'var(--rose)',
+                    fontWeight: 600,
+                    marginTop: 2
+                  }}>
+                    {(liveTelemetry?.fusion_contribution?.sensor_contribution || 'positive_influence') === 'positive_influence' ? '✓ Wellness Boost' : '⚠ Distress Warn'}
+                  </span>
+                </div>
+
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.015)', padding: 12, borderRadius: 'var(--radius-md)', border: '1px dashed rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Radio style={{ width: 18, height: 18, color: 'var(--text-muted)', animation: 'pulse 2s infinite' }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    No wearable device currently paired to GATT stream. Connect a device to initiate real-time fusion analysis.
+                  </span>
+                </div>
+                <button className="btn btn-secondary btn-xs" onClick={() => navigate('/sensor')}>
+                  Pair Wearable
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Record Upload + History Row */}

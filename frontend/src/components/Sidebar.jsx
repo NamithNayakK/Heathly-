@@ -19,7 +19,7 @@ const NAV = [
     group: 'Intelligence',
     items: [
       { label: 'Emotion Analytics', path: '/emotion-analytics', icon: Brain, soon: true },
-      { label: 'Sensor Monitor', path: '/sensor', icon: Activity, soon: true },
+      { label: 'Sensor Monitor', path: '/sensor', icon: Activity },
       { label: 'Video Analysis', path: '/video', icon: Video, soon: true },
       { label: 'Behavioral Trends', path: '/trends', icon: BarChart2, soon: true },
     ]

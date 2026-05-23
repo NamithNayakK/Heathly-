@@ -1,4 +1,14 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+const getApiBaseUrl = () => {
+  const isLocalDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+  if (isLocalDev) {
+    return "/api/v1";
+  }
+
+  return import.meta.env.VITE_API_BASE_URL || "/api/v1";
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("token");
@@ -56,4 +66,21 @@ export const api = {
       method: "POST", 
       body: JSON.stringify(assessmentData) 
     }),
+
+  // Bluetooth & Wearables Integration
+  scanBluetoothDevices: () => request("/bluetooth/devices"),
+  connectBluetoothDevice: (address) => request("/bluetooth/connect", { method: "POST", body: JSON.stringify({ address }) }),
+  disconnectBluetoothDevice: () => request("/bluetooth/disconnect", { method: "POST" }),
+  getBluetoothStatus: () => request("/bluetooth/status", { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }),
+  getBluetoothStreamUrl: () => {
+    const isAbsoluteUrl = /^https?:\/\//.test(API_BASE_URL);
+    if (isAbsoluteUrl) {
+      const isSecure = API_BASE_URL.startsWith("https:");
+      const base = API_BASE_URL.replace(/^http/, isSecure ? "wss" : "ws");
+      return `${base}/bluetooth/stream`;
+    }
+
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProtocol}//${window.location.host}${API_BASE_URL}/bluetooth/stream`;
+  }
 };
