@@ -1,27 +1,35 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-export default function ProtectedRoute({ children }) {
+export default function ProtectedRoute({ children, allowedRoles }) {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const token = localStorage.getItem('token');
+  const role = localStorage.getItem('role') || 'patient';
 
   useEffect(() => {
     if (!token) {
       navigate('/login', { replace: true });
       return;
     }
+
+    // Check role-based access
+    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(role)) {
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+
     setIsAuthorized(true);
     setIsLoading(false);
-  }, [token, navigate]);
+  }, [token, navigate, role, allowedRoles]);
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin text-4xl mb-4">⏳</div>
-          <p className="text-gray-600">Loading...</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 12, animation: 'pulse 1s infinite' }}>⏳</div>
+          <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading...</p>
         </div>
       </div>
     );

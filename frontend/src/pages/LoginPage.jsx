@@ -1,13 +1,38 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
-import { Activity, AlertTriangle, Key, Lock, Mail, ShieldCheck, User } from "lucide-react";
+import { Activity, AlertTriangle, Key, Lock, Mail, ShieldCheck, User, Stethoscope, UserCog, Users } from "lucide-react";
 import { api } from "../lib/api";
+
+const ROLE_OPTIONS = [
+  {
+    value: "patient",
+    label: "Patient",
+    icon: User,
+    color: "var(--cyan)",
+    description: "Access your wellness dashboard, assessments, and AI companion",
+  },
+  {
+    value: "consultant",
+    label: "Consultant",
+    icon: Stethoscope,
+    color: "var(--emerald)",
+    description: "Manage patients, view sensor data, and write clinical notes",
+  },
+  {
+    value: "admin",
+    label: "Admin",
+    icon: UserCog,
+    color: "var(--violet)",
+    description: "Platform oversight, user management, and system analytics",
+  },
+];
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [isRegister, setIsRegister] = useState(false);
+  const [selectedRole, setSelectedRole] = useState("patient");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const { register, handleSubmit, reset } = useForm({ defaultValues: { email: "", password: "", full_name: "" } });
@@ -15,11 +40,14 @@ export default function LoginPage() {
   const onSubmit = async (form) => {
     setError(""); setLoading(true);
     try {
-      const payload = isRegister ? await api.register(form) : await api.login({ email: form.email, password: form.password });
+      const payload = isRegister
+        ? await api.register({ ...form, role: selectedRole })
+        : await api.login({ email: form.email, password: form.password });
       localStorage.setItem("token", payload.access_token);
       localStorage.setItem("user_id", payload.user_id || "");
       localStorage.setItem("email", payload.user_email || payload.email || "");
       localStorage.setItem("full_name", payload.full_name || "");
+      localStorage.setItem("role", payload.role || "patient");
       navigate("/dashboard");
     } catch (e) {
       setError(e.message);
@@ -71,7 +99,7 @@ export default function LoginPage() {
         </div>
 
         {/* Right Form Panel */}
-        <div style={{ background: 'var(--bg-elevated)', padding: '48px 36px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 24 }}>
+        <div style={{ background: 'var(--bg-elevated)', padding: '40px 36px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 20 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
               {isRegister ? 'Create account' : 'Sign in'}
@@ -90,13 +118,73 @@ export default function LoginPage() {
 
           <motion.form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {isRegister && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Full Name</label>
-                <div style={{ position: 'relative' }}>
-                  <User style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: 'var(--text-muted)' }} />
-                  <input className="input-field" style={{ paddingLeft: 38 }} placeholder="Jane Smith" {...register("full_name", { required: isRegister })} />
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Full Name</label>
+                  <div style={{ position: 'relative' }}>
+                    <User style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: 'var(--text-muted)' }} />
+                    <input className="input-field" style={{ paddingLeft: 38 }} placeholder="Jane Smith" {...register("full_name", { required: isRegister })} />
+                  </div>
                 </div>
-              </div>
+
+                {/* Role Selector */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Select Role</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                    {ROLE_OPTIONS.map((role) => {
+                      const Icon = role.icon;
+                      const isSelected = selectedRole === role.value;
+                      return (
+                        <button
+                          key={role.value}
+                          type="button"
+                          onClick={() => setSelectedRole(role.value)}
+                          style={{
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                            padding: '12px 8px', borderRadius: 10,
+                            background: isSelected ? `${role.color}14` : 'var(--bg-surface)',
+                            border: `1.5px solid ${isSelected ? role.color : 'var(--bg-border)'}`,
+                            cursor: 'pointer', transition: 'all 0.2s ease',
+                            transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                            boxShadow: isSelected ? `0 0 16px ${role.color}20` : 'none',
+                          }}
+                        >
+                          <div style={{
+                            width: 32, height: 32, borderRadius: 8,
+                            background: isSelected ? `${role.color}22` : 'rgba(255,255,255,0.04)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.2s ease',
+                          }}>
+                            <Icon style={{ width: 16, height: 16, color: isSelected ? role.color : 'var(--text-muted)' }} />
+                          </div>
+                          <span style={{
+                            fontSize: 11, fontWeight: 600,
+                            color: isSelected ? role.color : 'var(--text-secondary)',
+                          }}>
+                            {role.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={selectedRole}
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 4 }}
+                      transition={{ duration: 0.2 }}
+                      style={{
+                        fontSize: 10, color: 'var(--text-muted)', textAlign: 'center',
+                        padding: '6px 8px', borderRadius: 6,
+                        background: 'rgba(255,255,255,0.02)',
+                      }}
+                    >
+                      {ROLE_OPTIONS.find(r => r.value === selectedRole)?.description}
+                    </motion.div>
+                  </AnimatePresence>
+                </div>
+              </>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -122,7 +210,7 @@ export default function LoginPage() {
 
           <div style={{ textAlign: 'center', borderTop: '1px solid var(--bg-border)', paddingTop: 16 }}>
             <button
-              onClick={() => { setIsRegister(v => !v); setError(""); reset(); }}
+              onClick={() => { setIsRegister(v => !v); setError(""); reset(); setSelectedRole("patient"); }}
               style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--cyan)', fontWeight: 500 }}
             >
               {isRegister ? 'Already have an account? Sign in' : "Don't have an account? Register"}

@@ -274,7 +274,108 @@ async def submit_session_analytics(
     db.add(session)
     db.commit()
     db.refresh(session)
+    print(f"--- [Session Analytics Database Commit] Type: {payload.session_type.upper()} | Expression: {payload.dominant_expression} | Stress: {payload.voice_stress_score:.2f} | Keywords: {payload.key_transcript_words} ---")
     return session
+
+
+class ImageFrameRequest(BaseModel):
+    image_base64: str
+
+class ImageFrameResponse(BaseModel):
+    dominant_expression: str
+    confidence: float
+    facial_arousal: float
+    facial_valence: float
+    all_scores: dict[str, float]
+    model_source: str
+
+@router.post("/analyze-frame", response_model=ImageFrameResponse)
+def analyze_frame(payload: ImageFrameRequest) -> dict[str, Any]:
+    """Analyze a single real-time webcam frame using DeepFace."""
+    import base64
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    from app.ml.facial_expression_cnn import EXPRESSION_LABELS, _AROUSAL_MAP, _VALENCE_MAP
+
+    try:
+        from deepface import DeepFace
+    except Exception:
+        DeepFace = None
+
+    try:
+        data_str = payload.image_base64
+        if "," in data_str:
+            data_str = data_str.split(",")[1]
+        
+        image_data = base64.b64decode(data_str)
+        image = Image.open(io.BytesIO(image_data)).convert("RGB")
+        frame = np.array(image)
+
+        if DeepFace is not None:
+            analysis = DeepFace.analyze(
+                img_path=frame,
+                actions=["emotion"],
+                detector_backend="opencv",
+                enforce_detection=False,
+            )
+
+            if isinstance(analysis, list):
+                analysis = analysis[0]
+
+            emotion_scores = analysis.get("emotion", {}) or {}
+            if emotion_scores:
+                dominant_expression = max(emotion_scores, key=emotion_scores.get).lower()
+                confidence = float(emotion_scores[dominant_expression]) / 100.0
+                all_scores = {label: float(emotion_scores.get(label, 0.0)) / 100.0 for label in EXPRESSION_LABELS}
+            else:
+                dominant_expression = "neutral"
+                confidence = 0.0
+                all_scores = {label: 0.0 for label in EXPRESSION_LABELS}
+            model_source = "deepface_realtime"
+        else:
+            gray = Image.fromarray(frame).convert("L").resize((48, 48))
+            img_array = np.array(gray, dtype=np.float32) / 255.0
+            intensity = float(img_array.mean())
+            variance = float(img_array.var())
+            if variance > 0.035:
+                dominant_expression = "surprise"
+            elif intensity < 0.35:
+                dominant_expression = "sad"
+            elif intensity > 0.65:
+                dominant_expression = "happy"
+            else:
+                dominant_expression = "neutral"
+            confidence = 0.55
+            all_scores = {label: 0.0 for label in EXPRESSION_LABELS}
+            all_scores[dominant_expression] = confidence
+            model_source = "fallback_heuristic"
+
+        if dominant_expression not in _VALENCE_MAP:
+            dominant_expression = "neutral"
+
+        facial_arousal = _AROUSAL_MAP[dominant_expression]
+        facial_valence = _VALENCE_MAP[dominant_expression]
+
+        print(
+            f"--- [DeepFace Real-Time Inference] Expression: {dominant_expression.upper()} "
+            f"(conf: {confidence:.4f}) | Valence: {facial_valence:.2f} | Arousal: {facial_arousal:.2f} ---"
+        )
+        return {
+            "dominant_expression": dominant_expression,
+            "confidence": round(confidence, 4),
+            "facial_arousal": facial_arousal,
+            "facial_valence": facial_valence,
+            "all_scores": all_scores,
+            "model_source": model_source,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to process image: {str(e)}"
+        )
 
 
 @router.post("/comprehensive-assessment", response_model=dict[str, Any], status_code=status.HTTP_201_CREATED)

@@ -1,11 +1,11 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Activity, BarChart2, Bell, Brain, ChevronRight, ClipboardList,
+  Activity, BarChart2, Bell, Brain, Calendar, ChevronRight, ClipboardList,
   FileText, Home, Lock, LogOut, MessageSquare, Mic, Radio,
-  Settings, Shield, Sliders, User, Users, Video, Zap
+  Settings, Shield, Sliders, Stethoscope, User, UserCog, Users, Video, Zap
 } from 'lucide-react';
 
-const NAV = [
+const PATIENT_NAV = [
   {
     group: 'Core',
     items: [
@@ -18,34 +18,81 @@ const NAV = [
   {
     group: 'Intelligence',
     items: [
-      { label: 'Emotion Analytics', path: '/emotion-analytics', icon: Brain, soon: true },
       { label: 'Sensor Monitor', path: '/sensor', icon: Activity },
-      { label: 'Video Analysis', path: '/video', icon: Video, soon: true },
-      { label: 'Behavioral Trends', path: '/trends', icon: BarChart2, soon: true },
-    ]
-  },
-  {
-    group: 'System',
-    items: [
-      { label: 'Bias Monitoring', path: '/bias', icon: Shield, soon: true },
-      { label: 'Explainability', path: '/explainability', icon: Sliders, soon: true },
-      { label: 'Audit Logs', path: '/audit', icon: Lock, soon: true },
-      { label: 'Community', path: '/forum', icon: Users },
+      { label: 'Video Analysis', path: '/video', icon: Video },
     ]
   },
   {
     group: 'Workspace',
     items: [
+      { label: 'Community', path: '/forum', icon: Users },
       { label: 'Results', path: '/results', icon: Zap },
-      { label: 'Settings', path: '/settings', icon: Settings, soon: true },
-      { label: 'Notifications', path: '/notifications', icon: Bell, soon: true },
     ]
   },
 ];
 
+const CONSULTANT_NAV = [
+  {
+    group: 'Clinical',
+    items: [
+      { label: 'Dashboard', path: '/dashboard', icon: Home },
+      { label: 'Patient Queue', path: '/patient-queue', icon: Users },
+      { label: 'Sensor Analysis', path: '/patient-sensor-view', icon: Activity },
+      { label: 'Health Records', path: '/health-report', icon: FileText },
+    ]
+  },
+  {
+    group: 'Practice',
+    items: [
+      { label: 'Consultation Notes', path: '/consultation-notes', icon: FileText },
+      { label: 'Appointments', path: '/appointments', icon: Calendar },
+    ]
+  },
+  {
+    group: 'Workspace',
+    items: [
+      { label: 'Community', path: '/forum', icon: Users },
+      { label: 'Results', path: '/results', icon: Zap },
+    ]
+  },
+];
+
+const ADMIN_NAV = [
+  {
+    group: 'Overview',
+    items: [
+      { label: 'Dashboard', path: '/dashboard', icon: Home },
+      { label: 'User Management', path: '/user-management', icon: UserCog },
+    ]
+  },
+  {
+    group: 'Operations',
+    items: [
+      { label: 'System Analytics', path: '/system-analytics', icon: BarChart2 },
+      { label: 'Audit Logs', path: '/audit-logs', icon: Shield },
+      { label: 'Platform Settings', path: '/platform-settings', icon: Settings },
+    ]
+  },
+  {
+    group: 'Workspace',
+    items: [
+      { label: 'Community', path: '/forum', icon: Users },
+    ]
+  },
+];
+
+const ROLE_CONFIG = {
+  patient: { nav: PATIENT_NAV, color: 'var(--cyan)', label: 'Patient', subtitle: 'Clinical AI Platform' },
+  consultant: { nav: CONSULTANT_NAV, color: 'var(--emerald)', label: 'Consultant', subtitle: 'Clinical Workspace' },
+  admin: { nav: ADMIN_NAV, color: 'var(--violet)', label: 'Admin', subtitle: 'Platform Control' },
+};
+
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const role = localStorage.getItem('role') || 'patient';
+  const config = ROLE_CONFIG[role] || ROLE_CONFIG.patient;
+  const NAV = config.nav;
 
   const handleLogout = () => {
     localStorage.clear();
@@ -59,11 +106,17 @@ export default function Sidebar() {
     <aside className="app-sidebar">
       {/* Logo */}
       <div className="sidebar-logo">
-        <div className="sidebar-logo-mark">H</div>
+        <div className="sidebar-logo-mark" style={{
+          background: role === 'admin'
+            ? 'linear-gradient(135deg, var(--violet), var(--rose))'
+            : role === 'consultant'
+            ? 'linear-gradient(135deg, var(--emerald), var(--blue))'
+            : 'linear-gradient(135deg, var(--cyan), var(--blue))',
+        }}>H</div>
         <div>
           <div className="sidebar-logo-text">HEALTHLY</div>
           <div style={{ fontSize: '9px', color: 'var(--text-muted)', letterSpacing: '0.08em', marginTop: '1px' }}>
-            Clinical AI Platform
+            {config.subtitle}
           </div>
         </div>
       </div>
@@ -79,11 +132,18 @@ export default function Sidebar() {
                 <button
                   key={item.path}
                   className={`sidebar-item ${active ? 'active' : ''}`}
-                  style={{ width: '100%', background: 'none', border: '1px solid transparent', textAlign: 'left' }}
+                  style={{
+                    width: '100%', background: 'none', border: '1px solid transparent', textAlign: 'left',
+                    ...(active ? {
+                      background: `${config.color}12`,
+                      color: config.color,
+                      borderColor: `${config.color}30`,
+                    } : {}),
+                  }}
                   onClick={() => !item.soon && navigate(item.path)}
                   title={item.soon ? 'Coming soon' : item.label}
                 >
-                  <item.icon style={{ width: 15, height: 15, flexShrink: 0 }} />
+                  <item.icon style={{ width: 15, height: 15, flexShrink: 0, ...(active ? { color: config.color } : {}) }} />
                   <span style={{ flex: 1 }}>{item.label}</span>
                   {item.soon && (
                     <span style={{
@@ -92,7 +152,7 @@ export default function Sidebar() {
                       fontFamily: 'IBM Plex Mono', letterSpacing: '0.06em'
                     }}>SOON</span>
                   )}
-                  {active && !item.soon && <span className="sidebar-indicator" />}
+                  {active && !item.soon && <span className="sidebar-indicator" style={{ background: config.color }} />}
                 </button>
               );
             })}
@@ -109,13 +169,17 @@ export default function Sidebar() {
         }}>
           <div style={{
             width: 28, height: 28, borderRadius: '50%',
-            background: 'linear-gradient(135deg, var(--cyan), var(--violet))',
+            background: role === 'admin'
+              ? 'linear-gradient(135deg, var(--violet), var(--rose))'
+              : role === 'consultant'
+              ? 'linear-gradient(135deg, var(--emerald), var(--blue))'
+              : 'linear-gradient(135deg, var(--cyan), var(--violet))',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0
           }}>
             {userName.charAt(0).toUpperCase()}
           </div>
-          <div style={{ minWidth: 0 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {userName}
             </div>
@@ -123,6 +187,9 @@ export default function Sidebar() {
               {userEmail}
             </div>
           </div>
+          <span className={`badge ${role === 'admin' ? 'badge-violet' : role === 'consultant' ? 'badge-live' : 'badge-cyan'}`} style={{ fontSize: 8, flexShrink: 0 }}>
+            {config.label}
+          </span>
         </div>
         <button
           onClick={handleLogout}

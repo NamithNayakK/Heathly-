@@ -57,6 +57,11 @@ export const api = {
       method: "POST", 
       body: JSON.stringify(sessionData) 
     }),
+  analyzeFrame: (image_base64) => 
+    request("/multimodal/analyze-frame", { 
+      method: "POST", 
+      body: JSON.stringify({ image_base64 }) 
+    }),
   getMultimodalDashboard: () => 
     request("/multimodal/dashboard", { 
       headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } 
@@ -82,5 +87,14 @@ export const api = {
 
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     return `${wsProtocol}//${window.location.host}${API_BASE_URL}/bluetooth/stream`;
-  }
+  },
+
+  // Admin endpoints
+  getAdminUsers: () => request("/admin/users"),
+  updateUserRole: (userId, role) => request(`/admin/users/${userId}/role`, { method: "PUT", body: JSON.stringify({ role }) }),
+  getAdminStats: () => request("/admin/stats"),
+
+  // Consultant / Admin shared endpoints
+  getPatients: () => request("/admin/patients"),
+  getPatientSensorData: (patientId) => request(`/admin/patients/${patientId}/sensor-data`),
 };

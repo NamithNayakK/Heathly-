@@ -20,13 +20,14 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenRe
         email=payload.email,
         full_name=payload.full_name,
         hashed_password=get_password_hash(payload.password),
+        role=payload.role or "patient",
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
     token = create_access_token(subject=user.email)
-    return TokenResponse(access_token=token, user_email=user.email, full_name=user.full_name)
+    return TokenResponse(access_token=token, user_email=user.email, full_name=user.full_name, role=user.role or "patient")
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -36,9 +37,9 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     token = create_access_token(subject=user.email)
-    return TokenResponse(access_token=token, user_email=user.email, full_name=user.full_name)
+    return TokenResponse(access_token=token, user_email=user.email, full_name=user.full_name, role=user.role or "patient")
 
 
 @router.get("/me", response_model=UserProfileResponse)
 def me(current_user: User = Depends(get_current_user)) -> UserProfileResponse:
-    return UserProfileResponse(id=current_user.id, email=current_user.email, full_name=current_user.full_name)
+    return UserProfileResponse(id=current_user.id, email=current_user.email, full_name=current_user.full_name, role=current_user.role or "patient")

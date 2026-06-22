@@ -7,6 +7,8 @@ import {
   Shield, TrendingUp, Upload, Zap, Battery, Heart, Radio
 } from "lucide-react";
 import { api } from "../lib/api";
+import ConsultantDashboard from "./ConsultantDashboard";
+import AdminDashboard from "./AdminDashboard";
 
 const MODALITY_CARDS = [
   { label: "PHQ-9 Analysis", icon: ClipboardList, color: "var(--cyan)", path: "/assessment" },
@@ -70,6 +72,13 @@ function WellnessRing({ score }) {
 }
 
 export default function DashboardPage() {
+  const role = localStorage.getItem('role') || 'patient';
+
+  // Delegate to role-specific dashboards
+  if (role === 'consultant') return <ConsultantDashboard />;
+  if (role === 'admin') return <AdminDashboard />;
+
+  // Patient Dashboard (default)
   const navigate = useNavigate();
   const [dashData, setDashData] = useState(null);
   const [history, setHistory] = useState([]);
