@@ -97,4 +97,21 @@ export const api = {
   // Consultant / Admin shared endpoints
   getPatients: () => request("/admin/patients"),
   getPatientSensorData: (patientId) => request(`/admin/patients/${patientId}/sensor-data`),
+
+  // WiFi Telemetry Ingestion Endpoints
+  getWifiUsers: () => request("/../../api/users"),
+  getWifiHistory: (userId, limit = 20) => request(`/../../api/users/${userId}/history?limit=${limit}`),
+  getWifiRecommendations: (userId) => request(`/../../api/users/${userId}/recommendations`),
+  getWifiTrends: (userId) => request(`/../../api/users/${userId}/trends`),
+  getWifiLatest: (userId) => request(`/../../api/users/${userId}/latest`),
+  getWifiRisk: (userId) => request(`/../../api/users/${userId}/risk`),
+  submitWifiPHQ9: (userId, answers) => request("/../../api/phq9-assessment", { method: "POST", body: JSON.stringify({ user_id: userId, answers }) }),
+  getWifiStreamUrl: (userId) => {
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? `${window.location.hostname}:8000`
+      : window.location.host;
+    return `${wsProtocol}//${host}/ws/dashboard/${userId}`;
+  },
 };
+

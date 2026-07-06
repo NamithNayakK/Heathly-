@@ -1,7 +1,6 @@
-import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Brain, CheckCircle2, ClipboardList, Zap, AlertTriangle } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowLeft, ArrowRight, CheckCircle2, Zap, AlertTriangle } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 
@@ -17,26 +16,43 @@ const QUESTIONS = [
   "Thoughts that you would be better off dead, or of hurting yourself",
 ];
 
-const LABELS = ["Not at all", "Several days", "More than half the days", "Nearly every day"];
-const SCORE_COLORS = ['var(--emerald)', 'var(--cyan)', 'var(--amber)', 'var(--rose)'];
+const LABELS = [
+  { label: "Not at all",            sub: "0 days in the past 2 weeks" },
+  { label: "Several days",          sub: "1–6 days" },
+  { label: "More than half the days", sub: "7–11 days" },
+  { label: "Nearly every day",      sub: "12–14 days" },
+];
+
+// Calm, non-judgmental — all teal/lavender, no red in the input flow
+const OPTION_COLORS = ["var(--teal)", "var(--teal)", "var(--lav)", "var(--lav)"];
+
+const slideVariants = {
+  enter: (dir) => ({ opacity: 0, x: dir > 0 ? 40 : -40 }),
+  center: { opacity: 1, x: 0 },
+  exit:  (dir) => ({ opacity: 0, x: dir > 0 ? -40 : 40 }),
+};
 
 export default function AssessmentPage() {
   const navigate = useNavigate();
   const [answers, setAnswers] = useState(Array(9).fill(null));
   const [current, setCurrent] = useState(0);
+  const [dir, setDir] = useState(1);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { register, handleSubmit, setValue, watch } = useForm();
 
   const answered = useMemo(() => answers.filter(a => a !== null).length, [answers]);
-  const progress = ((current + 1) / QUESTIONS.length) * 100;
-  const isLast = current === QUESTIONS.length - 1;
+  const progress  = (current / (QUESTIONS.length - 1)) * 100;
+  const isLast    = current === QUESTIONS.length - 1;
 
-  const update = (idx, val) => {
+  const goTo = (next) => {
+    setDir(next > current ? 1 : -1);
+    setCurrent(next);
+  };
+
+  const update = (val) => {
     const next = [...answers];
-    next[idx] = Number(val);
+    next[current] = val;
     setAnswers(next);
-    setValue(`q_${idx}`, Number(val));
   };
 
   const submit = async () => {
@@ -53,214 +69,164 @@ export default function AssessmentPage() {
     }
   };
 
-  // Live risk preview based on answers so far
-  const currentTotal = answers.filter(a => a !== null).reduce((s, a) => s + a, 0);
-  const projectedRisk = currentTotal <= 4 ? 'Minimal' : currentTotal <= 9 ? 'Mild' : currentTotal <= 14 ? 'Moderate' : 'Severe';
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ maxWidth: 680, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24 }}>
 
       {/* Header */}
       <div>
-        <div className="page-title">AI Clinical Assessment</div>
-        <div className="page-subtitle">PHQ-9 Depression Screening · DSM-V Aligned · DistilBERT + XGBoost Analysis</div>
+        <div className="page-title">PHQ-9 Assessment</div>
+        <div className="page-subtitle">One question at a time · DSM-V aligned · Takes ~3 minutes</div>
       </div>
 
-      {/* Progress timeline */}
-      <div className="card card-sm">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
-            QUESTION {current + 1} OF {QUESTIONS.length}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11 }}>
-            <span style={{ color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>ANSWERED: {answered}/9</span>
-            <span className={`badge ${
-              projectedRisk === 'Severe' ? 'badge-rose' :
-              projectedRisk === 'Moderate' ? 'badge-amber' :
-              projectedRisk === 'Mild' ? 'badge-cyan' : 'badge-live'
-            }`}>
-              Projected: {projectedRisk}
-            </span>
-          </div>
+      {/* Breathing progress line */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontFamily: "IBM Plex Mono" }}>
+          <span style={{ color: "var(--text-muted)" }}>Question {current + 1} of {QUESTIONS.length}</span>
+          <span style={{ color: "var(--text-muted)" }}>{answered} answered</span>
         </div>
-        <div className="meter-bar">
-          <div className="meter-fill" style={{ width: `${progress}%` }} />
+        <div className="breath-line">
+          <motion.div
+            className="breath-line-fill"
+            animate={{ width: `${progress}%` }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          />
         </div>
         {/* Step dots */}
-        <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
           {QUESTIONS.map((_, i) => (
             <button
               key={i}
-              onClick={() => setCurrent(i)}
+              onClick={() => goTo(i)}
               style={{
-                width: answers[i] !== null ? 20 : 12,
-                height: 4,
-                borderRadius: 2,
-                background: i === current ? 'var(--cyan)' : answers[i] !== null ? 'var(--emerald)' : 'rgba(255,255,255,0.08)',
-                border: 'none',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                flexShrink: 0,
+                width: i === current ? 24 : 8, height: 8, borderRadius: 4,
+                background: i === current ? "var(--teal)" : answers[i] !== null ? "var(--teal-dark)" : "rgba(255,255,255,0.07)",
+                border: "none", cursor: "pointer",
+                transition: "all 0.5s cubic-bezier(0.16,1,0.3,1)",
+                opacity: i === current ? 1 : 0.7,
               }}
             />
           ))}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 16 }}>
-        {/* Question Card */}
-        <motion.div
-          key={current}
-          initial={{ opacity: 0, x: 12 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.22 }}
-          className="card"
-        >
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', marginBottom: 8 }}>
-              SYMPTOM DOMAIN {current + 1}
-            </div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.5 }}>
-              {QUESTIONS[current]}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-              Rate based on the past 2 weeks
-            </div>
-          </div>
+      {/* Question card with AnimatePresence */}
+      <div style={{ position: "relative", minHeight: 400 }}>
+        <AnimatePresence mode="wait" custom={dir}>
+          <motion.div
+            key={current}
+            custom={dir}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+            style={{ position: "absolute", inset: 0 }}
+          >
+            <div className="bento-card" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
+              {/* Question text */}
+              <div>
+                <div style={{ fontSize: 10, color: "var(--teal)", fontFamily: "IBM Plex Mono", letterSpacing: "0.1em", marginBottom: 12 }}>
+                  QUESTION {current + 1} · PAST 2 WEEKS
+                </div>
+                <div style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "clamp(1.1rem,2vw,1.4rem)", fontWeight: 600, lineHeight: 1.45, color: "var(--text-primary)" }}>
+                  {QUESTIONS[current]}
+                </div>
+              </div>
 
-          <form onSubmit={handleSubmit(submit)} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[0, 1, 2, 3].map((score) => {
-              const selected = answers[current] === score;
-              return (
-                <label key={score} className={`radio-option ${selected ? 'selected' : ''}`}>
-                  <input
-                    type="radio"
-                    style={{ display: 'none' }}
-                    {...register(`q_${current}`)}
-                    checked={answers[current] === score}
-                    onChange={() => update(current, score)}
-                  />
-                  <div style={{
-                    width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                    border: `2px solid ${selected ? SCORE_COLORS[score] : 'rgba(255,255,255,0.15)'}`,
-                    background: selected ? `${SCORE_COLORS[score]}30` : 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'all 0.15s ease',
-                  }}>
-                    {selected && <div style={{ width: 6, height: 6, borderRadius: '50%', background: SCORE_COLORS[score] }} />}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: selected ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                      {LABELS[score]}
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', marginTop: 1 }}>
-                      Score: {score}
-                    </div>
-                  </div>
-                </label>
-              );
-            })}
+              {/* Answer options */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+                {LABELS.map(({ label, sub }, score) => {
+                  const selected = answers[current] === score;
+                  const color = OPTION_COLORS[score];
+                  return (
+                    <motion.button
+                      key={score}
+                      onClick={() => update(score)}
+                      whileHover={{ scale: 1.015 }}
+                      whileTap={{ scale: 0.985 }}
+                      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                      className={`answer-option ${selected ? "selected" : ""}`}
+                    >
+                      {/* Custom radio circle */}
+                      <div style={{
+                        width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                        border: `2px solid ${selected ? color : "rgba(255,255,255,0.15)"}`,
+                        background: selected ? `${color}25` : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        transition: "all 0.5s cubic-bezier(0.16,1,0.3,1)",
+                      }}>
+                        {selected && (
+                          <motion.div
+                            initial={{ scale: 0 }} animate={{ scale: 1 }}
+                            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                            style={{ width: 8, height: 8, borderRadius: "50%", background: color }}
+                          />
+                        )}
+                      </div>
+                      <div style={{ flex: 1, textAlign: "left" }}>
+                        <div style={{ fontSize: 14, fontWeight: selected ? 600 : 400, color: selected ? "var(--text-primary)" : "var(--text-secondary)", transition: "color 0.5s ease" }}>
+                          {label}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{sub}</div>
+                      </div>
+                      {selected && <CheckCircle2 size={16} style={{ color, flexShrink: 0 }} />}
+                    </motion.button>
+                  );
+                })}
+              </div>
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 8, paddingTop: 16, borderTop: '1px solid var(--bg-border)' }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                disabled={current === 0}
-                onClick={() => setCurrent(v => v - 1)}
-              >
-                <ArrowLeft style={{ width: 13, height: 13 }} /> Previous
-              </button>
-              {!isLast ? (
+              {/* Navigation */}
+              <div style={{ display: "flex", gap: 10, paddingTop: 8, borderTop: "1px solid var(--bg-border)" }}>
                 <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  disabled={answers[current] === null}
-                  onClick={() => setCurrent(v => v + 1)}
-                  style={{ marginLeft: 'auto' }}
+                  className="btn btn-secondary btn-sm"
+                  disabled={current === 0}
+                  onClick={() => goTo(current - 1)}
                 >
-                  Next <ArrowRight style={{ width: 13, height: 13 }} />
+                  <ArrowLeft size={13} /> Back
                 </button>
-              ) : (
-                <button
-                  type="submit"
-                  className="btn btn-primary btn-sm"
-                  disabled={answered !== 9 || isSubmitting}
-                  style={{ marginLeft: 'auto' }}
-                >
-                  {isSubmitting ? 'Analyzing...' : 'Submit & Analyze'}
-                  <Zap style={{ width: 13, height: 13 }} />
-                </button>
+                <div style={{ flex: 1 }} />
+                {!isLast ? (
+                  <motion.button
+                    className="btn btn-primary btn-sm"
+                    disabled={answers[current] === null}
+                    onClick={() => goTo(current + 1)}
+                    whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    Continue <ArrowRight size={13} />
+                  </motion.button>
+                ) : (
+                  <motion.button
+                    className="btn btn-primary btn-sm"
+                    disabled={answered !== 9 || isSubmitting}
+                    onClick={submit}
+                    whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    {isSubmitting ? "Analyzing..." : "Submit & Analyze"} <Zap size={13} />
+                  </motion.button>
+                )}
+              </div>
+
+              {error && (
+                <div className="alert alert-warn">
+                  <AlertTriangle size={13} /> <span>{error}</span>
+                </div>
               )}
             </div>
-          </form>
-
-          {error && (
-            <div className="alert alert-error" style={{ marginTop: 12 }}>
-              <AlertTriangle style={{ width: 13, height: 13 }} />
-              <span>{error}</span>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Side Panel: AI Interpretation */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="card card-sm">
-            <div className="section-title">AI Interpretation</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <Brain style={{ width: 14, height: 14, color: 'var(--violet)' }} />
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Live assessment preview</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                <span style={{ color: 'var(--text-muted)' }}>Current Score</span>
-                <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono' }}>{currentTotal}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                <span style={{ color: 'var(--text-muted)' }}>Projected Risk</span>
-                <span className={`badge ${
-                  projectedRisk === 'Severe' ? 'badge-rose' :
-                  projectedRisk === 'Moderate' ? 'badge-amber' :
-                  projectedRisk === 'Mild' ? 'badge-cyan' : 'badge-live'
-                }`}>{projectedRisk}</span>
-              </div>
-              <div className="meter-bar" style={{ marginTop: 4 }}>
-                <div
-                  className={`meter-fill ${
-                    projectedRisk === 'Severe' ? 'rose' :
-                    projectedRisk === 'Moderate' ? 'amber' : ''
-                  }`}
-                  style={{ width: `${Math.min((currentTotal / 27) * 100, 100)}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="card card-sm">
-            <div className="section-title">Assessment Info</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 11 }}>
-              {[
-                ['Instrument', 'PHQ-9'],
-                ['Framework', 'DSM-V'],
-                ['Classifier', 'DistilBERT'],
-                ['Risk Model', 'XGBoost'],
-                ['Timeframe', 'Last 14 days'],
-              ].map(([k, v]) => (
-                <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{k}</span>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{v}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="card card-sm" style={{ background: 'var(--amber-dim)', borderColor: 'rgba(245,158,11,0.2)' }}>
-            <div style={{ fontSize: 11, color: '#FCD34D', fontFamily: 'IBM Plex Mono', marginBottom: 6 }}>NOTE</div>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              This tool is not a substitute for professional clinical evaluation.
-            </div>
-          </div>
-        </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
+
+      {/* Reassurance note */}
+      <motion.div
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+        transition={{ delay: 0.5, duration: 0.8 }}
+        style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.7 }}
+      >
+        Your responses are private and encrypted. This assessment does not replace professional clinical evaluation.
+      </motion.div>
+
     </div>
   );
 }

@@ -14,8 +14,11 @@ import LoginPage from "./pages/LoginPage";
 import ResultsPage from "./pages/ResultsPage";
 import SensorPage from "./pages/SensorPage";
 import VideoPage from "./pages/VideoPage";
+import PhoneDataPage from "./pages/PhoneDataPage";
+
 
 // Consultant pages
+
 import PatientQueuePage from "./pages/PatientQueuePage";
 import PatientSensorViewPage from "./pages/PatientSensorViewPage";
 import ConsultationNotesPage from "./pages/ConsultationNotesPage";
@@ -70,6 +73,7 @@ export default function App() {
         <Route path="/assessment" element={<ProtectedRoute allowedRoles={['patient']}><AssessmentPage /></ProtectedRoute>} />
         <Route path="/health-report" element={<ProtectedRoute allowedRoles={['patient', 'consultant']}><HealthReportPage /></ProtectedRoute>} />
         <Route path="/sensor" element={<ProtectedRoute allowedRoles={['patient']}><SensorPage /></ProtectedRoute>} />
+        <Route path="/phone-data" element={<ProtectedRoute allowedRoles={['patient']}><PhoneDataPage /></ProtectedRoute>} />
         <Route path="/video" element={<ProtectedRoute allowedRoles={['patient']}><VideoPage /></ProtectedRoute>} />
         <Route path="/comprehensive-assessment" element={<ProtectedRoute allowedRoles={['patient']}><ComprehensiveAssessmentPage /></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute allowedRoles={['patient']}><ChatPage /></ProtectedRoute>} />

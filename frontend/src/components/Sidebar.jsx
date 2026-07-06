@@ -19,6 +19,7 @@ const PATIENT_NAV = [
     group: 'Intelligence',
     items: [
       { label: 'Sensor Monitor', path: '/sensor', icon: Activity },
+      { label: 'WiFi Telemetry Console', path: '/phone-data', icon: Radio },
       { label: 'Video Analysis', path: '/video', icon: Video },
     ]
   },
@@ -82,9 +83,9 @@ const ADMIN_NAV = [
 ];
 
 const ROLE_CONFIG = {
-  patient: { nav: PATIENT_NAV, color: 'var(--cyan)', label: 'Patient', subtitle: 'Clinical AI Platform' },
+  patient: { nav: PATIENT_NAV, color: 'var(--teal)', label: 'Patient', subtitle: 'Mental Wellness Platform' },
   consultant: { nav: CONSULTANT_NAV, color: 'var(--emerald)', label: 'Consultant', subtitle: 'Clinical Workspace' },
-  admin: { nav: ADMIN_NAV, color: 'var(--violet)', label: 'Admin', subtitle: 'Platform Control' },
+  admin: { nav: ADMIN_NAV, color: 'var(--lav)', label: 'Admin', subtitle: 'Platform Control' },
 };
 
 export default function Sidebar() {
@@ -108,10 +109,10 @@ export default function Sidebar() {
       <div className="sidebar-logo">
         <div className="sidebar-logo-mark" style={{
           background: role === 'admin'
-            ? 'linear-gradient(135deg, var(--violet), var(--rose))'
+            ? 'linear-gradient(135deg, var(--lav), var(--violet))'
             : role === 'consultant'
             ? 'linear-gradient(135deg, var(--emerald), var(--blue))'
-            : 'linear-gradient(135deg, var(--cyan), var(--blue))',
+            : 'linear-gradient(135deg, var(--teal-dark), var(--lav))',
         }}>H</div>
         <div>
           <div className="sidebar-logo-text">HEALTHLY</div>
@@ -170,10 +171,10 @@ export default function Sidebar() {
           <div style={{
             width: 28, height: 28, borderRadius: '50%',
             background: role === 'admin'
-              ? 'linear-gradient(135deg, var(--violet), var(--rose))'
+              ? 'linear-gradient(135deg, var(--lav), var(--violet))'
               : role === 'consultant'
               ? 'linear-gradient(135deg, var(--emerald), var(--blue))'
-              : 'linear-gradient(135deg, var(--cyan), var(--violet))',
+              : 'linear-gradient(135deg, var(--teal-dark), var(--lav))',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0
           }}>
@@ -187,7 +188,7 @@ export default function Sidebar() {
               {userEmail}
             </div>
           </div>
-          <span className={`badge ${role === 'admin' ? 'badge-violet' : role === 'consultant' ? 'badge-live' : 'badge-cyan'}`} style={{ fontSize: 8, flexShrink: 0 }}>
+          <span className={`badge ${role === 'admin' ? 'badge-lav' : role === 'consultant' ? 'badge-live' : 'badge-teal'}`} style={{ fontSize: 8, flexShrink: 0 }}>
             {config.label}
           </span>
         </div>

@@ -48,3 +48,13 @@ Thumbs.db
 *.safetensors
 *.pt
 backend/app/ml/artifacts/
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/terminal_output.txt
+
+# Package locks (optional — remove line below if you want to track lock files)
+# frontend/package-lock.json
