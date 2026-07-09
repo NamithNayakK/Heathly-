@@ -29,6 +29,41 @@ def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
+async def daily_cleanup_and_aggregation_loop():
+    """Background scheduler task to aggregate daily metrics and purge stale sensor data."""
+    logger.info("✓ Background WiFi aggregation & retention scheduler started")
+    while True:
+        try:
+            # Check for aggregates and cleanup every 6 hours
+            await asyncio.sleep(21600)
+            from app.db.session import SessionLocal
+            from app.api.v1.endpoints.wifi_sensor import run_daily_aggregations
+            from app.models.wifi_sensor import SensorReading
+            from datetime import datetime, timedelta
+            
+            db = SessionLocal()
+            try:
+                # 1. Run daily aggregations
+                await run_daily_aggregations(db)
+                
+                # 2. Enforce 90-day retention policy
+                cutoff = datetime.utcnow() - timedelta(days=90)
+                deleted = db.query(SensorReading).filter(SensorReading.timestamp < cutoff).delete()
+                db.commit()
+                if deleted:
+                    logger.info(f"Purged {deleted} telemetry records older than 90 days (retention policy).")
+            except Exception as e:
+                logger.error(f"Error in background daily scheduler execution: {e}")
+                db.rollback()
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            logger.info("Background daily scheduler cancelled.")
+            break
+        except Exception as e:
+            logger.error(f"Background daily scheduler error: {e}")
+
+
 @app.on_event("startup")
 async def load_ml_models() -> None:
     """Pre-load trained ML models at startup for faster inference."""
@@ -43,6 +78,20 @@ async def load_ml_models() -> None:
         logger.info("✓ Mental state prediction model loaded successfully")
     except Exception as e:
         logger.warning(f"⚠ Mental state model loading failed, will use fallback: {e}")
+        
+    # Start the async background aggregation loop
+    asyncio.create_task(daily_cleanup_and_aggregation_loop())
+    
+    # Start the websocket heartbeat monitoring loop
+    from app.api.v1.endpoints.wifi_sensor import websocket_heartbeat_monitor
+    asyncio.create_task(websocket_heartbeat_monitor())
 
+
+
+from app.api.v1.endpoints.wifi_sensor import router as wifi_router
+import asyncio
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
+app.include_router(wifi_router)
+
+

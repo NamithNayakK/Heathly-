@@ -15,3 +15,6 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     role: Mapped[str] = mapped_column(String(50), default="patient", server_default="patient", nullable=True)
+    device_id: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    device_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+

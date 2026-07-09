@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.phq9_assessment import PHQ9Assessment
-from app.models.sensor_data import SensorData
+from app.models.wifi_sensor import SensorReading, DailyAggregate
+from app.models.health_report import HealthReport
 from app.models.user import User
 
 router = APIRouter()
@@ -79,7 +80,8 @@ def platform_stats(
     total_consultants = db.query(func.count(User.id)).filter(User.role == "consultant").scalar() or 0
     total_admins = db.query(func.count(User.id)).filter(User.role == "admin").scalar() or 0
     total_assessments = db.query(func.count(PHQ9Assessment.id)).scalar() or 0
-    total_sensor_records = db.query(func.count(SensorData.id)).scalar() or 0
+    total_sensor_records = db.query(func.count(SensorReading.id)).scalar() or 0
+    total_health_reports = db.query(func.count(HealthReport.id)).scalar() or 0
 
     return {
         "total_users": total_users,
@@ -106,7 +108,7 @@ def list_patients(
             .order_by(PHQ9Assessment.created_at.desc())
             .first()
         )
-        sensor_count = db.query(func.count(SensorData.id)).filter(SensorData.user_id == p.id).scalar() or 0
+        sensor_count = db.query(func.count(SensorReading.id)).filter(SensorReading.user_id == p.id).scalar() or 0
         result.append({
             "id": p.id,
             "email": p.email,
@@ -133,11 +135,11 @@ def get_patient_sensor_data(
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    records = (
-        db.query(SensorData)
-        .filter(SensorData.user_id == patient_id)
-        .order_by(SensorData.created_at.desc())
-        .limit(50)
+    sensors = (
+        db.query(SensorReading)
+        .filter(SensorReading.user_id == patient_id)
+        .order_by(SensorReading.created_at.desc())
+        .limit(20)
         .all()
     )
 

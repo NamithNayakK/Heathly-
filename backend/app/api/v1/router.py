@@ -13,3 +13,4 @@ api_router.include_router(bluetooth.router, prefix="/bluetooth", tags=["bluetoot
 api_router.include_router(webhook.router, tags=["webhook"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 
+

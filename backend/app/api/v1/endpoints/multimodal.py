@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.health_report import HealthReport
-from app.models.sensor_data import SensorData
+from app.models.wifi_sensor import SensorReading
 from app.models.session_analytics import SessionAnalytics
 from app.models.phq9_assessment import PHQ9Assessment
 from app.models.user import User
@@ -221,7 +221,7 @@ async def submit_sensor_data(
     payload: SensorDataRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> SensorData:
+) -> SensorReading:
     """Submit wearable biometrics telemetry (Mode 3).
     Processes heart rate, HRV, sleep, and steps through a Bidirectional LSTM-like stress parser.
     """
@@ -234,17 +234,17 @@ async def submit_sensor_data(
     stress_index = float((hrv_stress * 0.45) + (gsr_stress * 0.35) + (sleep_stress * 0.20))
     stress_index = max(0.0, min(1.0, stress_index))
 
-    sensor = SensorData(
+    sensor_reading = SensorReading(
         user_id=current_user.id,
-        heart_rate_variability=payload.heart_rate_variability,
+        hrv=payload.heart_rate_variability,
         galvanic_skin_response=payload.galvanic_skin_response,
-        sleep_duration_hours=payload.sleep_duration_hours,
+        sleep_hours=payload.sleep_duration_hours,
         stress_index=stress_index
     )
-    db.add(sensor)
+    db.add(sensor_reading)
     db.commit()
-    db.refresh(sensor)
-    return sensor
+    db.refresh(sensor_reading)
+    return sensor_reading
 
 
 @router.post("/session", response_model=SessionAnalyticsResponse, status_code=status.HTTP_201_CREATED)
@@ -336,22 +336,25 @@ def analyze_frame(payload: ImageFrameRequest) -> dict[str, Any]:
                 all_scores = {label: 0.0 for label in EXPRESSION_LABELS}
             model_source = "deepface_realtime"
         else:
+            from app.ml.facial_expression_cnn import load_facial_model, predict_expression
+            import torch
+            from pathlib import Path
+
+            global _PYTORCH_DEEPFACE_MODEL
+            if '_PYTORCH_DEEPFACE_MODEL' not in globals():
+                model_path = Path(__file__).parent.parent.parent.parent / "ml" / "artifacts" / "deepface_cnn.pt"
+                _PYTORCH_DEEPFACE_MODEL = load_facial_model(model_path)
+            
             gray = Image.fromarray(frame).convert("L").resize((48, 48))
             img_array = np.array(gray, dtype=np.float32) / 255.0
-            intensity = float(img_array.mean())
-            variance = float(img_array.var())
-            if variance > 0.035:
-                dominant_expression = "surprise"
-            elif intensity < 0.35:
-                dominant_expression = "sad"
-            elif intensity > 0.65:
-                dominant_expression = "happy"
-            else:
-                dominant_expression = "neutral"
-            confidence = 0.55
-            all_scores = {label: 0.0 for label in EXPRESSION_LABELS}
-            all_scores[dominant_expression] = confidence
-            model_source = "fallback_heuristic"
+            image_tensor = torch.tensor(img_array).unsqueeze(0).unsqueeze(0)
+            
+            prediction = predict_expression(_PYTORCH_DEEPFACE_MODEL, image_tensor)
+            
+            dominant_expression = prediction.dominant_expression
+            confidence = prediction.confidence
+            all_scores = prediction.all_scores
+            model_source = "deepface_pytorch_cnn"
 
         if dominant_expression not in _VALENCE_MAP:
             dominant_expression = "neutral"
@@ -498,7 +501,7 @@ async def get_multimodal_dashboard(
     """
     # 1. Fetch latest raw modalities from SQLite
     latest_phq9 = db.query(PHQ9Assessment).filter(PHQ9Assessment.user_id == current_user.id).order_by(PHQ9Assessment.created_at.desc()).first()
-    latest_sensor = db.query(SensorData).filter(SensorData.user_id == current_user.id).order_by(SensorData.created_at.desc()).first()
+    latest_sensor = db.query(SensorReading).filter(SensorReading.user_id == current_user.id).order_by(SensorReading.created_at.desc()).first()
     latest_session = db.query(SessionAnalytics).filter(SessionAnalytics.user_id == current_user.id).order_by(SessionAnalytics.created_at.desc()).first()
     all_reports = db.query(HealthReport).filter(HealthReport.user_id == current_user.id).order_by(HealthReport.created_at.desc()).limit(3).all()
 
@@ -535,9 +538,9 @@ async def get_multimodal_dashboard(
     if latest_sensor:
         modes_active.append("sensor_wearable_analysis")
         sensors_summary = {
-            "heart_rate_variability": latest_sensor.heart_rate_variability,
+            "heart_rate_variability": latest_sensor.hrv,
             "galvanic_skin_response": latest_sensor.galvanic_skin_response,
-            "sleep_duration_hours": latest_sensor.sleep_duration_hours,
+            "sleep_duration_hours": latest_sensor.sleep_hours,
             "stress_index": latest_sensor.stress_index,
             "captured_at": latest_sensor.created_at
         }

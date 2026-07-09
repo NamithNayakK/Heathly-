@@ -6,6 +6,9 @@ from app.db.session import Base
 
 
 class SensorData(Base):
+    """DEPRECATED: Use SensorReading in wifi_sensor.py instead.
+    This table is kept for historical purposes only. New telemetry must not be written here.
+    """
     __tablename__ = "sensor_data"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)

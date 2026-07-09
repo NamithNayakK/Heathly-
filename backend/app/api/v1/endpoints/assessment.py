@@ -133,3 +133,22 @@ def phq9_history(
             for record in records
         ]
     )
+
+
+@router.post("/agentic")
+def run_agentic_orchestrator(
+    payload: PHQ9Request,
+    text: str = "",
+    current_user: User = Depends(get_current_user)
+) -> dict:
+    """
+    Runs the LangChain Agentic AI Orchestrator:
+    coordinating: PHQ-9 scoring -> DistilBERT emotion analysis -> XGBoost risk classification -> response generation.
+    """
+    from app.services.agentic_orchestrator import orchestrate_assessment
+    try:
+        return orchestrate_assessment(payload.answers, text)
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e))
+
