@@ -58,3 +58,8 @@ frontend/terminal_output.txt
 
 # Package locks (optional — remove line below if you want to track lock files)
 # frontend/package-lock.json
+
+# Claude AI files
+launch_claude.ps1
+*claude*
+.claude/

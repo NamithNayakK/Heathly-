@@ -58,7 +58,7 @@ class SurveySample:
 def resolve_dataset_path(dataset_path: str | Path | None = None) -> Path:
     if dataset_path is not None:
         return Path(dataset_path)
-    return Path(__file__).resolve().parents[3] / "mental_wellness_dataset_u.xlsx"
+    return Path(__file__).resolve().parents[3] / "datasets" / "mental_wellness_dataset_u.xlsx"
 
 
 def load_survey_samples(dataset_path: str | Path | None = None) -> list[SurveySample]:

@@ -218,24 +218,39 @@ def train_sensor_bilstm(output_dir: Path, epochs: int, batch_size: int, seed: in
 
 
 def train_deepface_cnn(output_dir: Path, epochs: int, batch_size: int, seed: int) -> dict:
-    """Train DeepFace CNN on synthetic facial expression data."""
-    print("\n[MODE 4B] Training DeepFace CNN on synthetic facial data...", flush=True)
+    """Train DeepFace CNN on real facial expression data (FER-2013)."""
+    import torchvision.transforms as transforms
+    from torchvision.datasets import ImageFolder
 
-    X, y = generate_face_data(2800, seed)
-    split = int(len(X) * 0.8)
+    print("\n[MODE 4B] Training DeepFace CNN on real facial data...", flush=True)
 
-    # Reshape: [N, 1, 48, 48]
-    X_train_t = torch.tensor(X[:split]).unsqueeze(1)
-    X_val_t = torch.tensor(X[split:]).unsqueeze(1)
-    y_train_t = torch.tensor(y[:split])
-    y_val_t = torch.tensor(y[split:])
+    data_dir = Path(__file__).resolve().parents[3] / "datasets" / "archive"
+    train_dir = data_dir / "train"
+    test_dir = data_dir / "test"
 
-    train_ds = TensorDataset(X_train_t, y_train_t)
-    val_ds = TensorDataset(X_val_t, y_val_t)
+    if not train_dir.exists() or not test_dir.exists():
+        print(f"Dataset not found at {data_dir}. Skipping real DeepFace training.", flush=True)
+        return {}
+
+    # Define transforms for 48x48 grayscale images
+    transform = transforms.Compose([
+        transforms.Grayscale(num_output_channels=1),
+        transforms.Resize((48, 48)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.5], std=[0.5])
+    ])
+
+    train_ds = ImageFolder(root=str(train_dir), transform=transform)
+    val_ds = ImageFolder(root=str(test_dir), transform=transform)
+
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=batch_size)
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"  Using device: {device}", flush=True)
+    print(f"  Loaded {len(train_ds)} train images, {len(val_ds)} test images.", flush=True)
 
-    model = DeepFaceCNN(num_classes=len(EXPRESSION_LABELS))
+    model = DeepFaceCNN(num_classes=len(train_ds.classes)).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=5e-4)
     criterion = nn.CrossEntropyLoss()
 
@@ -243,6 +258,7 @@ def train_deepface_cnn(output_dir: Path, epochs: int, batch_size: int, seed: int
         model.train()
         total_loss = 0.0
         for xb, yb in train_loader:
+            xb, yb = xb.to(device), yb.to(device)
             optimizer.zero_grad()
             logits = model(xb)
             loss = criterion(logits, yb)
@@ -250,12 +266,13 @@ def train_deepface_cnn(output_dir: Path, epochs: int, batch_size: int, seed: int
             optimizer.step()
             total_loss += loss.item()
 
-        if (epoch + 1) % 5 == 0 or epoch == 0:
+        if (epoch + 1) % max(1, epochs//5) == 0 or epoch == 0 or epoch == epochs - 1:
             model.eval()
             correct = 0
             total = 0
             with torch.no_grad():
                 for xb, yb in val_loader:
+                    xb, yb = xb.to(device), yb.to(device)
                     preds = model(xb).argmax(dim=1)
                     correct += (preds == yb).sum().item()
                     total += yb.numel()
@@ -267,15 +284,18 @@ def train_deepface_cnn(output_dir: Path, epochs: int, batch_size: int, seed: int
     total = 0
     with torch.no_grad():
         for xb, yb in val_loader:
+            xb, yb = xb.to(device), yb.to(device)
             preds = model(xb).argmax(dim=1)
             correct += (preds == yb).sum().item()
             total += yb.numel()
     val_acc = correct / total
 
+    # Save to CPU to ensure portability
+    model.to("cpu")
     save_facial_model(model, output_dir / "deepface_cnn.pt")
     print(f"  DeepFace CNN saved | val_acc={val_acc:.4f}", flush=True)
 
-    meta = {"model": "DeepFaceCNN", "val_accuracy": round(val_acc, 4), "classes": EXPRESSION_LABELS, "samples": 2800}
+    meta = {"model": "DeepFaceCNN", "val_accuracy": round(val_acc, 4), "classes": train_ds.classes, "samples": len(train_ds)}
     (output_dir / "deepface_cnn_metadata.json").write_text(json.dumps(meta, indent=2))
     return meta
 
