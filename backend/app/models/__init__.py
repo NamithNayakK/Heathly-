@@ -5,11 +5,9 @@ from app.models.user import User
 from app.models.health_report import HealthReport
 from app.models.sensor_data import SensorData
 from app.models.session_analytics import SessionAnalytics
-from app.models.phone_data import PhoneData, MentalHealthAssessment
 from app.models.wifi_sensor import SensorReading, DailyAggregate, RiskHistory
 
 __all__ = [
     "User", "PHQ9Assessment", "ChatMessage", "ForumPost", "HealthReport",
-    "SensorData", "SessionAnalytics", "PhoneData", "MentalHealthAssessment",
-    "SensorReading", "DailyAggregate", "RiskHistory",
+    "SensorData", "SessionAnalytics", "SensorReading", "DailyAggregate", "RiskHistory",
 ]

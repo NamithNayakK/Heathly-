@@ -84,8 +84,8 @@ class MultimodalDashboardResponse(BaseModel):
     reports_summary: list[dict[str, Any]]
     sensors_summary: dict[str, Any] | None
     sessions_summary: dict[str, Any] | None
-    unified_wellness_index: float # 0.0 to 100.0 consolidated score
-    risk_classification: str # "Low", "Medium", "High"
+    unified_wellness_index: float | None # 0.0 to 100.0 consolidated score (None if no assessment taken)
+    risk_classification: str # "Low", "Medium", "High", or "Pending Check-in"
     alert_flags: list[str]
     recommendations: list[str]
     explainability_layer: list[ExplainabilityFactor] # SHAP/LIME-like factors
@@ -572,19 +572,18 @@ async def get_multimodal_dashboard(
     if total_raw_weight > 0:
         for k, v in raw_weights.items():
             attention_weights[k] = v / total_raw_weight
-    else:
-        attention_weights = {"phq9": 0.25, "sensor": 0.25, "session": 0.25, "reports": 0.25}
 
-    unified_score = 100.0
-    
-    # Compute clinical contributions (SHAP/LIME logic)
+    # Compute individual stream scores (0 to 100) & SHAP contributions
+    mode_scores = {}
+
     if latest_phq9:
-        phq9_impact = (latest_phq9.score / 27.0) * 40.0
-        unified_score -= phq9_impact
+        # Clinical PHQ-9: Score 0 = 100%, Score 27 = 0%
+        phq9_score_val = max(0.0, min(100.0, 100.0 - (latest_phq9.score / 27.0) * 100.0))
+        mode_scores["phq9"] = phq9_score_val
         
         att_weight = attention_weights.get("phq9", 0.0)
         contrib = "negative_influence" if latest_phq9.score >= 10 else "positive_influence"
-        reason = f"PHQ-9 score is {latest_phq9.score}/27. Dynamic attention weight = {att_weight:.2f}."
+        reason = f"PHQ-9 score is {latest_phq9.score}/27 (Sub-index: {phq9_score_val:.1f}%). Attention weight = {att_weight:.2f}."
         explainability.append(ExplainabilityFactor(modality="phq9_text_analysis", weight=att_weight, contribution_direction=contrib, reason=reason))
         
         if latest_phq9.score >= 15:
@@ -595,12 +594,13 @@ async def get_multimodal_dashboard(
             recommendations.append("URGENT: Please contact a trusted friend, counselor, or wellness helpline immediately.")
 
     if latest_sensor:
-        sensor_impact = latest_sensor.stress_index * 30.0
-        unified_score -= sensor_impact
+        # Sensor biometrics: Stress 0.0 = 100%, Stress 1.0 = 0%
+        sensor_score_val = max(0.0, min(100.0, (1.0 - latest_sensor.stress_index) * 100.0))
+        mode_scores["sensor"] = sensor_score_val
         
         att_weight = attention_weights.get("sensor", 0.0)
         contrib = "negative_influence" if latest_sensor.stress_index >= 0.5 else "positive_influence"
-        reason = f"LSTM Stress index is {latest_sensor.stress_index:.2f} based on biometrics. Attention weight = {att_weight:.2f}."
+        reason = f"LSTM Stress index is {latest_sensor.stress_index:.2f} (Sub-index: {sensor_score_val:.1f}%). Attention weight = {att_weight:.2f}."
         explainability.append(ExplainabilityFactor(modality="sensor_wearable_analysis", weight=att_weight, contribution_direction=contrib, reason=reason))
         
         if latest_sensor.stress_index >= 0.7:
@@ -608,17 +608,17 @@ async def get_multimodal_dashboard(
             recommendations.append("Autonomic nervous markers show extreme arousal. Try resonant deep-breathing exercises.")
 
     if latest_session:
-        # Chat/Video linguistic + DeepFace valence deduction
-        valence_factor = max(0.0, -latest_session.facial_valence)
-        session_impact = ((1.0 - latest_session.sentiment_score) * 12.0) + (valence_factor * 18.0)
-        unified_score -= session_impact
+        # Chat / DeepFace video: Sentiment [-1, 1], Valence [-1, 1]
+        norm_sentiment = (latest_session.sentiment_score + 1.0) / 2.0
+        norm_valence = (latest_session.facial_valence + 1.0) / 2.0
+        session_score_val = max(0.0, min(100.0, ((norm_sentiment * 0.5) + (norm_valence * 0.5)) * 100.0))
+        mode_scores["session"] = session_score_val
         
         att_weight = attention_weights.get("session", 0.0)
         contrib = "negative_influence" if latest_session.sentiment_score <= 0.0 or latest_session.facial_valence < 0.0 else "positive_influence"
-        reason = f"Facial Valence is {latest_session.facial_valence:.2f} and Sentiment is {latest_session.sentiment_score:.2f}. Attention weight = {att_weight:.2f}."
+        reason = f"Facial Valence={latest_session.facial_valence:.2f}, Sentiment={latest_session.sentiment_score:.2f} (Sub-index: {session_score_val:.1f}%). Attention weight = {att_weight:.2f}."
         explainability.append(ExplainabilityFactor(modality="chat_video_speech_analysis", weight=att_weight, contribution_direction=contrib, reason=reason))
         
-        # Check transcript keywords
         suicidal_keywords = {"hopeless", "worthless", "hurt", "die", "suicide", "lonely"}
         triggered = [w for w in latest_session.key_transcript_words if w.lower() in suicidal_keywords]
         if triggered:
@@ -632,31 +632,38 @@ async def get_multimodal_dashboard(
         for r in all_reports:
             if r.diagnoses:
                 diagnoses_list.extend(r.diagnoses)
-        
         diagnoses_list = list(set(diagnoses_list))
+        
+        reports_score_val = max(0.0, 100.0 - min(40.0, len(diagnoses_list) * 15.0))
+        mode_scores["reports"] = reports_score_val
+        
         contrib = "negative_influence" if diagnoses_list else "positive_influence"
         reason = f"User has {len(diagnoses_list)} active psychiatric diagnoses in history. Attention weight = {att_weight:.2f}."
         explainability.append(ExplainabilityFactor(modality="medical_record_analysis", weight=att_weight, contribution_direction=contrib, reason=reason))
         
         if diagnoses_list:
-            recommendations.append(f"Ensure you are following current psychiatric guidelines for GAD/MDD medications.")
+            recommendations.append("Ensure you are following current psychiatric guidelines for GAD/MDD medications.")
 
-    # Bound consolidated Unified Wellness Index
-    unified_score = max(0.0, min(100.0, unified_score))
+    # Synthesize overall Unified Wellness Index from active mode scores
+    if mode_scores and attention_weights:
+        unified_score = sum(attention_weights[m] * score for m, score in mode_scores.items())
+        unified_score = round(max(0.0, min(100.0, unified_score)), 1)
+        
+        if unified_score >= 80.0:
+            risk_classification = "Low"
+        elif unified_score >= 55.0:
+            risk_classification = "Medium"
+        else:
+            risk_classification = "High"
+    else:
+        unified_score = None
+        risk_classification = "Pending Check-in"
 
     # Cross-Modal Safety Fusion Logic
     if latest_phq9 and latest_sensor:
         if latest_phq9.score >= 15 and latest_sensor.stress_index >= 0.65:
             alert_flags.append("CRITICAL: Autonomic-Clinical Co-Stress Concurrence")
             recommendations.append("Combined metrics confirm autonomic nervous distress under high clinical loads. Urgent medical check-in suggested.")
-
-    # 4. Multi-modal Risk Classification
-    if unified_score >= 80.0:
-        risk_classification = "Low"
-    elif unified_score >= 50.0:
-        risk_classification = "Medium"
-    else:
-        risk_classification = "High"
 
     return {
         "user_id": current_user.id,
@@ -665,7 +672,7 @@ async def get_multimodal_dashboard(
         "reports_summary": reports_summary,
         "sensors_summary": sensors_summary,
         "sessions_summary": sessions_summary,
-        "unified_wellness_index": round(unified_score, 1),
+        "unified_wellness_index": unified_score,
         "risk_classification": risk_classification,
         "alert_flags": alert_flags,
         "recommendations": list(set(recommendations)),

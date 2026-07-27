@@ -21,7 +21,7 @@ function RiskGauge({ score, label }) {
   const r = 62, circ = 2 * Math.PI * r;
   const pct = Math.min(100, Math.max(0, displayed));
   const offset = circ * (1 - pct / 100);
-  const color = pct >= 70 ? "var(--teal)" : pct >= 45 ? "var(--lav)" : "var(--amber)";
+  const color = score === null || score === undefined ? "var(--lav)" : pct >= 70 ? "var(--teal)" : pct >= 45 ? "var(--lav)" : "var(--amber)";
 
   return (
     <div style={{ position: "relative", width: 148, height: 148, flexShrink: 0 }}>
@@ -43,7 +43,7 @@ function RiskGauge({ score, label }) {
           transition={{ delay: 0.6 }}
           style={{ fontSize: 30, fontWeight: 700, color, fontFamily: "IBM Plex Sans", lineHeight: 1 }}
         >
-          {score ?? "--"}
+          {score !== null && score !== undefined ? score : "--"}
         </motion.div>
         <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 5, textTransform: "uppercase", letterSpacing: "0.1em" }}>
           {label || "Wellness"}
@@ -230,9 +230,9 @@ export default function DashboardPage() {
               <div>
                 <div className="section-title" style={{ marginBottom: 8 }}>Wellness Index</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontSize: 15, fontWeight: 600 }}>{risk} Risk</span>
-                  <span className={`badge ${risk?.toLowerCase() === "low" ? "badge-live" : risk?.toLowerCase() === "medium" ? "badge-amber" : "badge-rose"}`}>
-                    {wellness !== null ? `${wellness}` : "Pending"}
+                  <span style={{ fontSize: 15, fontWeight: 600 }}>{risk?.includes("Pending") ? risk : `${risk} Risk`}</span>
+                  <span className={`badge ${risk?.toLowerCase().includes("low") ? "badge-live" : risk?.toLowerCase().includes("medium") ? "badge-amber" : risk?.toLowerCase().includes("high") ? "badge-rose" : "badge-muted"}`}>
+                    {wellness !== null && wellness !== undefined ? `${wellness}` : "Pending"}
                   </span>
                 </div>
               </div>
