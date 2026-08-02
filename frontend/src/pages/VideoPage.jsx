@@ -299,7 +299,8 @@ export default function VideoPage() {
       const base64Image = canvas.toDataURL("image/jpeg", 0.6);
 
       try {
-        const res = await api.analyzeFrame(base64Image);
+        const patientId = userProfile?.id || sessionStorage.getItem("user_id") || localStorage.getItem("user_id") || 1;
+        const res = await api.analyzeFrame(base64Image, { session_id: String(patientId), user_id: Number(patientId) });
         setDominantExpression(res.dominant_expression);
         setFacialValence(res.facial_valence);
         setFacialArousal(res.facial_arousal);

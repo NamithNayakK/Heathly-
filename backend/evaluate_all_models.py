@@ -148,8 +148,15 @@ try:
     X4_train, X4_val = X4[:split], X4[split:]
     y4_train, y4_val = y4[:split], y4[split:]
     from app.services.wearable_lstm import SensorBiLSTM
-    model_sensor = SensorBiLSTM(input_dim=4, hidden_dim=16, num_classes=1)
-    model_sensor.load_state_dict(torch.load("app/ml/artifacts/sensor_bilstm.pt", map_location="cpu")["state_dict"])
+    ckpt_sensor = torch.load("app/ml/artifacts/sensor_bilstm.pt", map_location="cpu")
+    meta_sensor = ckpt_sensor.get("metadata", {})
+    hidden_dim = meta_sensor.get("hidden_dim", 32)
+    try:
+        model_sensor = SensorBiLSTM(input_dim=4, hidden_dim=hidden_dim, num_classes=1)
+        model_sensor.load_state_dict(ckpt_sensor["state_dict"])
+    except Exception:
+        model_sensor = SensorBiLSTM(input_dim=4, hidden_dim=16, num_classes=1)
+        model_sensor.load_state_dict(ckpt_sensor["state_dict"])
     model_sensor.eval()
     X_val_t = torch.tensor(X4_val).unsqueeze(1)
     y_val_t = torch.tensor(y4_val, dtype=torch.float32).unsqueeze(1)

@@ -25,7 +25,7 @@ class PhysiologicalAssessment:
 class SensorBiLSTM(nn.Module):
     """Bidirectional LSTM for temporal wearable telemetry classification."""
 
-    def __init__(self, input_dim: int = 4, hidden_dim: int = 16, num_classes: int = 1):
+    def __init__(self, input_dim: int = 4, hidden_dim: int = 32, num_classes: int = 1):
         super().__init__()
         self.lstm = nn.LSTM(
             input_size=input_dim,

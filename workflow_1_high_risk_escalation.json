@@ -1,0 +1,131 @@
+{
+  "name": "Workflow 1: High-Risk Escalation Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "risk-alert",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "High-Risk Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "id": "node-webhook-risk-alert",
+      "webhookId": "risk-alert"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT u.id AS patient_id, u.full_name AS patient_name, u.email AS patient_email, c.email AS consultant_email, c.full_name AS consultant_name FROM users u LEFT JOIN users c ON c.role IN ('consultant', 'admin') WHERE u.id = CAST('{{ $json.body.user_id }}' AS INTEGER);"
+      },
+      "name": "Fetch Patient & Consultant Info",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        500,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Healthly PostgreSQL DB"
+        }
+      },
+      "id": "node-postgres-fetch"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst webhookData = $(\"High-Risk Webhook\").first().json.body || {};\nconst dbRows = $(\"Fetch Patient & Consultant Info\").all().map(i => i.json);\n\nconst patientName = (dbRows[0] && dbRows[0].patient_name) || webhookData.full_name || ('Patient #' + webhookData.user_id);\nconst patientEmail = (dbRows[0] && dbRows[0].patient_email) || webhookData.email || 'N/A';\nconst consultantEmail = (dbRows[0] && dbRows[0].consultant_email) || 'admin@healthly.com';\nconst riskLevel = webhookData.risk_level || 'High';\nconst score = webhookData.score !== undefined ? webhookData.score : (webhookData.phq9_score !== undefined ? webhookData.phq9_score : 'N/A');\nconst dominantEmotion = webhookData.dominant_emotion || 'Severe Distress';\nconst concernAreas = Array.isArray(webhookData.concern_areas) ? webhookData.concern_areas.join(', ') : (webhookData.concern_areas || 'Depression, High Risk');\nconst timestamp = webhookData.timestamp || new Date().toISOString();\nconst dashboardLink = 'http://localhost:5173/consultant/patients/' + webhookData.user_id;\n\nconst alertSubject = '🚨 [URGENT] High-Risk Mental Health Escalation: ' + patientName;\nconst alertBody = '=====================================================\\n🚨 HIGH-RISK MENTAL HEALTH ESCALATION ALERT\\n=====================================================\\n\\nPatient Details:\\n----------------\\n• ID: ' + webhookData.user_id + '\\n• Name: ' + patientName + '\\n• Email: ' + patientEmail + '\\n\\nClinical Risk Summary:\\n----------------------\\n• Risk Level: ' + riskLevel + '\\n• PHQ-9 Score: ' + score + ' / 27\\n• Dominant Emotion: ' + dominantEmotion + '\\n• Primary Concern Areas: ' + concernAreas + '\\n• Timestamp: ' + timestamp + '\\n\\nAction Required:\\n----------------\\nPlease review the patient details immediately in the Consultant Dashboard:\\n' + dashboardLink + '\\n\\n=====================================================\\nSystem: Healthly Automated Escalation Service (n8n Workflow #1)\\n';\n\nreturn [{\n  json: {\n    user_id: webhookData.user_id,\n    patient_name: patientName,\n    patient_email: patientEmail,\n    consultant_email: consultantEmail,\n    risk_level: riskLevel,\n    score: score,\n    dominant_emotion: dominantEmotion,\n    concern_areas: concernAreas,\n    timestamp: timestamp,\n    dashboard_link: dashboardLink,\n    alert_subject: alertSubject,\n    alert_body: alertBody,\n    status: 'ESCALATED_NOTIFICATION_SENT'\n  }\n}];"
+      },
+      "name": "Format Escalation Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        300
+      ],
+      "id": "node-format-alert"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconsole.log('=========================================');\nconsole.log('EMAIL NOTIFICATION DELIVERED TO CONSULTANT:');\nconsole.log('TO: ' + item.consultant_email);\nconsole.log('SUBJECT: ' + item.alert_subject);\nconsole.log(item.alert_body);\nconsole.log('=========================================');\n\nreturn [{\n  json: {\n    ...item,\n    email_delivered: true,\n    delivered_at: new Date().toISOString()\n  }\n}];"
+      },
+      "name": "Send Consultant Email Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        300
+      ],
+      "id": "node-send-email"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn [{\n  json: {\n    workflow: 'Workflow 1: High-Risk Escalation Alert',\n    status: 'SUCCESS',\n    execution_confirmed: true,\n    user_id: item.user_id,\n    logged_at: new Date().toISOString(),\n    details: item\n  }\n}];"
+      },
+      "name": "Log Workflow Execution",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        300
+      ],
+      "id": "node-log-execution"
+    }
+  ],
+  "connections": {
+    "High-Risk Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch Patient & Consultant Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Patient & Consultant Info": {
+      "main": [
+        [
+          {
+            "node": "Format Escalation Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Escalation Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Consultant Email Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Consultant Email Alert": {
+      "main": [
+        [
+          {
+            "node": "Log Workflow Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -195,11 +195,36 @@ def load_sensor_stress_data() -> tuple[np.ndarray, np.ndarray]:
         raise FileNotFoundError(f"data_stress.csv not found at {path}")
 
     rows_x, rows_y = [], []
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
+        # Normalize header keys to strip extra spaces or BOM
+        clean_field_map = {k.strip(): k for k in (reader.fieldnames or [])}
+        
+        target_cols = [
+            "snoring range", "respiration rate", "body temperature",
+            "limb movement", "blood oxygen", "eye movement",
+            "hours of sleep", "heart rate"
+        ]
+        
         for row in reader:
-            features = [float(row[col]) for col in SENSOR_FEATURE_COLUMNS]
-            stress_level = int(row["Stress Levels"])
+            features = []
+            for col in target_cols:
+                raw_val = row.get(clean_field_map.get(col, col), "0.0")
+                if raw_val is None or raw_val.strip().upper() in ("NULL", "", "NONE"):
+                    val = 0.0
+                else:
+                    try:
+                        val = float(raw_val)
+                    except ValueError:
+                        val = 0.0
+                features.append(val)
+                
+            raw_stress = row.get(clean_field_map.get("Stress Levels", "Stress Levels"), "0")
+            try:
+                stress_level = int(float(raw_stress))
+            except ValueError:
+                stress_level = 0
+                
             rows_x.append(features)
             # Binarize: 0-1 → low stress (0), 2-4 → high stress (1)
             rows_y.append(1 if stress_level >= 2 else 0)
@@ -207,6 +232,12 @@ def load_sensor_stress_data() -> tuple[np.ndarray, np.ndarray]:
     X = np.array(rows_x, dtype=np.float32)
     y = np.array(rows_y, dtype=np.int64)
     
+    # Fill zero placeholders with column means
+    for c in range(X.shape[1]):
+        non_zeros = X[X[:, c] > 0, c]
+        if len(non_zeros) > 0:
+            X[X[:, c] == 0, c] = non_zeros.mean()
+            
     # Normalize each feature column to [0, 1]
     X_min = X.min(axis=0, keepdims=True)
     X_max = X.max(axis=0, keepdims=True)
@@ -411,18 +442,53 @@ SURVEY_PHQ9_COLUMNS = [
 
 
 def load_survey_csv_samples() -> tuple[np.ndarray, np.ndarray, dict[int, str]]:
-    """Load the Google Forms survey CSV → (answers[N, 9], labels[N]) for LSTM.
+    """Load mental_wellness_dataset_15000.xlsx (or survey CSV) → (answers[N, 9], labels[N]) for LSTM.
     
-    Returns PHQ-9 answer scores and derived mental state labels.
+    Returns PHQ-9 answer scores and derived mental state labels across all 15,000 samples.
     """
-    path = DATASETS_DIR / "Mental Wellness Survey for Research Study  (Responses) - Form Responses 1.csv"
-    if not path.exists():
+    xlsx_path = DATASETS_DIR / "mental_wellness_dataset_15000.xlsx"
+    csv_path = DATASETS_DIR / "Mental Wellness Survey for Research Study  (Responses) - Form Responses 1.csv"
+    
+    id2label = {0: "stable", 1: "mild_distress", 2: "moderate_distress", 3: "severe_distress", 4: "crisis"}
+    answers_list, labels = [], []
+
+    if xlsx_path.exists():
+        import pandas as pd
+        df = pd.read_excel(xlsx_path)
+        phq_cols = ['Interest', 'Depressed', 'Sleep', 'Energy', 'Appetite', 'Self Worth', 'Concentration', 'Movement', 'Self Harm Thoughts']
+        for _, row in df.iterrows():
+            try:
+                phq9_answers = []
+                for col in phq_cols:
+                    val = str(row.get(col, "")).strip().lower()
+                    score = RESPONSE_SCORE_MAP.get(val, 0)
+                    phq9_answers.append(score)
+                
+                total = sum(phq9_answers)
+                self_harm = phq9_answers[8]
+                
+                if self_harm >= 2:
+                    label = 4  # crisis
+                elif total >= 20:
+                    label = 3  # severe_distress
+                elif total >= 15:
+                    label = 2  # moderate_distress
+                elif total >= 8:
+                    label = 1  # mild_distress
+                else:
+                    label = 0  # stable
+                
+                answers_list.append(phq9_answers)
+                labels.append(label)
+            except Exception:
+                continue
+        print(f"  [Loader] Loaded {len(answers_list)} samples from mental_wellness_dataset_15000.xlsx")
+        return np.array(answers_list, dtype=np.int64), np.array(labels, dtype=np.int64), id2label
+
+    if not csv_path.exists():
         return np.empty((0, 9), dtype=np.int64), np.empty((0,), dtype=np.int64), {}
 
-    id2label = {0: "stable", 1: "mild_distress", 2: "moderate_distress", 3: "severe_distress", 4: "crisis"}
-    
-    answers_list, labels = [], []
-    with open(path, "r", encoding="utf-8") as f:
+    with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             try:

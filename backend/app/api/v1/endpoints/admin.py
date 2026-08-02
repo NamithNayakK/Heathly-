@@ -1,6 +1,7 @@
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -8,6 +9,7 @@ from app.db.session import get_db
 from app.models.phq9_assessment import PHQ9Assessment
 from app.models.wifi_sensor import SensorReading, DailyAggregate
 from app.models.health_report import HealthReport
+from app.models.forum_post import ForumPost
 from app.models.user import User
 
 router = APIRouter()
@@ -20,8 +22,11 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
 
 
 def require_consultant_or_admin(current_user: User = Depends(get_current_user)) -> User:
-    if (current_user.role or "patient") not in ("consultant", "admin"):
+    role = current_user.role or "patient"
+    if role not in ("consultant", "admin"):
         raise HTTPException(status_code=403, detail="Consultant or admin access required")
+    if role == "consultant" and current_user.verification_status != "approved":
+        raise HTTPException(status_code=403, detail="Consultant verification pending or rejected")
     return current_user
 
 
@@ -42,6 +47,8 @@ def list_users(
                 "email": u.email,
                 "full_name": u.full_name,
                 "role": u.role or "patient",
+                "device_id": u.device_id,
+                "paired": bool(u.device_id and str(u.device_id).strip()),
                 "created_at": u.created_at.isoformat() if u.created_at else None,
             }
             for u in users
@@ -65,9 +72,13 @@ def update_user_role(
         raise HTTPException(status_code=404, detail="User not found")
 
     user.role = payload.role
+    if payload.role == "consultant":
+        user.verification_status = "approved"
+        user.verified_at = datetime.utcnow()
+        user.verified_by = f"admin_{current_user.id}"
     db.commit()
     db.refresh(user)
-    return {"id": user.id, "email": user.email, "role": user.role}
+    return {"id": user.id, "email": user.email, "role": user.role, "verification_status": user.verification_status}
 
 
 @router.get("/stats")
@@ -76,21 +87,131 @@ def platform_stats(
     current_user: User = Depends(require_admin),
 ):
     total_users = db.query(func.count(User.id)).scalar() or 0
-    total_patients = db.query(func.count(User.id)).filter(User.role == "patient").scalar() or 0
+    total_patients = db.query(func.count(User.id)).filter(or_(User.role == "patient", User.role.is_(None))).scalar() or 0
     total_consultants = db.query(func.count(User.id)).filter(User.role == "consultant").scalar() or 0
     total_admins = db.query(func.count(User.id)).filter(User.role == "admin").scalar() or 0
-    total_assessments = db.query(func.count(PHQ9Assessment.id)).scalar() or 0
+
+    # Total PHQ-9 assessments: all-time and last 7 days
+    total_assessments_all_time = db.query(func.count(PHQ9Assessment.id)).scalar() or 0
+    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    total_assessments_last_7_days = (
+        db.query(func.count(PHQ9Assessment.id))
+        .filter(PHQ9Assessment.created_at >= seven_days_ago)
+        .scalar()
+        or 0
+    )
+
+    # Count of currently unresolved needs_human_review=true cases
+    unresolved_reviews_count = (
+        db.query(func.count(PHQ9Assessment.id))
+        .filter(
+            PHQ9Assessment.needs_human_review == True,
+            PHQ9Assessment.reviewed_at.is_(None)
+        )
+        .scalar()
+        or 0
+    )
+
+    # Risk level distribution across all patients (from most recent PHQ-9 assessment per patient)
+    patients = db.query(User).filter(or_(User.role == "patient", User.role.is_(None))).all()
+    risk_distribution = {"Low": 0, "Medium": 0, "High": 0, "Unassessed": 0}
+
+    for patient in patients:
+        latest = (
+            db.query(PHQ9Assessment)
+            .filter(PHQ9Assessment.user_id == patient.id)
+            .order_by(PHQ9Assessment.created_at.desc())
+            .first()
+        )
+        if not latest or not latest.risk_level:
+            risk_distribution["Unassessed"] += 1
+        else:
+            rl = latest.risk_level.lower()
+            if "high" in rl or "severe" in rl:
+                risk_distribution["High"] += 1
+            elif "mod" in rl or "medium" in rl:
+                risk_distribution["Medium"] += 1
+            else:
+                risk_distribution["Low"] += 1
+
     total_sensor_records = db.query(func.count(SensorReading.id)).scalar() or 0
-    total_health_reports = db.query(func.count(HealthReport.id)).scalar() or 0
 
     return {
         "total_users": total_users,
         "patients": total_patients,
         "consultants": total_consultants,
         "admins": total_admins,
-        "total_assessments": total_assessments,
+        "total_assessments": total_assessments_all_time,
+        "assessments_submitted": {
+            "all_time": total_assessments_all_time,
+            "last_7_days": total_assessments_last_7_days,
+        },
+        "unresolved_reviews_count": unresolved_reviews_count,
+        "risk_distribution": risk_distribution,
         "total_sensor_records": total_sensor_records,
     }
+
+
+# --- FORUM MODERATION ENDPOINTS ---
+
+@router.get("/forum/flagged")
+def list_flagged_forum_posts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """List all forum posts flagged for review."""
+    posts = (
+        db.query(ForumPost, User)
+        .join(User, ForumPost.user_id == User.id)
+        .filter(ForumPost.is_flagged == True)
+        .order_by(ForumPost.created_at.desc())
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": post.id,
+                "title": post.title,
+                "content": post.content,
+                "author_name": user.full_name,
+                "author_email": user.email,
+                "is_flagged": post.is_flagged,
+                "created_at": post.created_at.isoformat() if post.created_at else None,
+            }
+            for post, user in posts
+        ]
+    }
+
+
+@router.post("/forum/{post_id}/approve")
+def approve_flagged_post(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Approve a flagged post (clears is_flagged flag)."""
+    post = db.query(ForumPost).filter(ForumPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Forum post not found")
+    post.is_flagged = False
+    db.commit()
+    return {"status": "success", "id": post_id, "is_flagged": False}
+
+
+@router.delete("/forum/{post_id}")
+def remove_flagged_post(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Remove a post permanently."""
+    post = db.query(ForumPost).filter(ForumPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Forum post not found")
+    db.delete(post)
+    db.commit()
+    return {"status": "success", "id": post_id, "message": "Post removed"}
+
 
 
 @router.get("/patients")

@@ -1,103 +1,72 @@
-/**
- * HeroScene.jsx — Lazy-loaded Three.js particle-wave orb
- * Reacts subtly to mouse position (parallax tilt, NOT aggressive).
- * Wrapped in Suspense at call-site with a CSS fallback.
- */
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, Suspense } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { Points, PointMaterial, MeshDistortMaterial, Sphere } from "@react-three/drei";
+import { useGLTF, Float } from "@react-three/drei";
 import * as THREE from "three";
+import brainModelUrl from "../assets/brain.glb?url";
 
-function ParticleField({ mouse }) {
-  const ref = useRef();
-  const count = 1400;
+function SolidBrain({ mouse }) {
+  const group = useRef();
+  const { scene } = useGLTF(brainModelUrl);
 
-  const positions = useMemo(() => {
-    const arr = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      // Distribute in a sphere
-      const theta = Math.random() * Math.PI * 2;
-      const phi   = Math.acos(2 * Math.random() - 1);
-      const r     = 1.6 + Math.random() * 0.8;
-      arr[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
-      arr[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      arr[i * 3 + 2] = r * Math.cos(phi);
-    }
-    return arr;
-  }, []);
+  const containerGroup = useMemo(() => {
+    const s = scene.clone(true);
+    
+    // Measure bounding box of the solid anatomical brain model
+    const box = new THREE.Box3().setFromObject(s);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    
+    // Shift model so its anatomical center is at [0,0,0]
+    s.position.sub(center);
+
+    // Normalize size so it fills the viewport nicely (target size ~ 3.4 units)
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const targetSize = 3.4;
+    const scaleFactor = maxDim > 0 ? targetSize / maxDim : 1;
+
+    const wrapper = new THREE.Group();
+    wrapper.add(s);
+    wrapper.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+    // Enhance materials for realistic lighting and organic depth
+    s.traverse((child) => {
+      if (child.isMesh && child.material) {
+        // Organic pinkish-purple soft matte brain finish with realistic lighting response
+        child.material.roughness = 0.45;
+        child.material.metalness = 0.05;
+      }
+    });
+
+    return wrapper;
+  }, [scene]);
 
   useFrame((state) => {
-    if (!ref.current) return;
+    if (!group.current) return;
     const t = state.clock.elapsedTime;
-    // Slow breath rotation
-    ref.current.rotation.y = t * 0.06 + mouse.current.x * 0.15;
-    ref.current.rotation.x = t * 0.03 + mouse.current.y * 0.08;
+    
+    // Continuous 3D rotation with subtle tilt and interactive cursor movement
+    group.current.rotation.y = t * 0.25 + mouse.current.x * 0.35;
+    group.current.rotation.x = Math.sin(t * 0.4) * 0.1 + mouse.current.y * 0.2;
   });
 
   return (
-    <Points ref={ref} positions={positions} stride={3} frustumCulled={false}>
-      <PointMaterial
-        transparent
-        color="#5EEAD4"
-        size={0.018}
-        sizeAttenuation
-        depthWrite={false}
-        opacity={0.65}
-      />
-    </Points>
+    <group ref={group}>
+      <Float speed={1.5} rotationIntensity={0.2} floatIntensity={0.4}>
+        <primitive object={containerGroup} />
+      </Float>
+    </group>
   );
 }
 
-function GlassOrb({ mouse }) {
-  const ref = useRef();
-  useFrame((state) => {
-    if (!ref.current) return;
-    const t = state.clock.elapsedTime;
-    // Gentle breathing scale
-    ref.current.scale.setScalar(1 + Math.sin(t * 0.5) * 0.04);
-    // Subtle tilt toward mouse
-    ref.current.rotation.y = mouse.current.x * 0.2;
-    ref.current.rotation.x = mouse.current.y * 0.1;
-  });
-
-  return (
-    <Sphere ref={ref} args={[1, 64, 64]}>
-      <MeshDistortMaterial
-        color="#A78BFA"
-        attach="material"
-        distort={0.35}
-        speed={1.2}
-        roughness={0.1}
-        metalness={0.1}
-        transparent
-        opacity={0.18}
-        wireframe={false}
-      />
-    </Sphere>
-  );
-}
-
-function InnerGlow({ mouse }) {
-  const ref = useRef();
-  useFrame((state) => {
-    if (!ref.current) return;
-    const t = state.clock.elapsedTime;
-    ref.current.scale.setScalar(0.55 + Math.sin(t * 0.7 + 1) * 0.06);
-  });
-  return (
-    <Sphere ref={ref} args={[1, 32, 32]}>
-      <meshBasicMaterial color="#5EEAD4" transparent opacity={0.06} />
-    </Sphere>
-  );
-}
+useGLTF.preload(brainModelUrl);
 
 export default function HeroScene() {
   const mouse = useRef({ x: 0, y: 0 });
 
   const handleMouseMove = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    mouse.current.x = ((e.clientX - rect.left) / rect.width  - 0.5) * 2;
-    mouse.current.y = ((e.clientY - rect.top)  / rect.height - 0.5) * -2;
+    mouse.current.x = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+    mouse.current.y = ((e.clientY - rect.top) / rect.height - 0.5) * -2;
   };
 
   return (
@@ -106,18 +75,23 @@ export default function HeroScene() {
       onMouseMove={handleMouseMove}
     >
       <Canvas
-        camera={{ position: [0, 0, 4.5], fov: 50 }}
+        camera={{ position: [0, 0, 6.5], fov: 45 }}
         gl={{ antialias: true, alpha: true }}
-        style={{ background: "transparent" }}
+        style={{ background: "transparent", pointerEvents: "none" }}
         dpr={[1, 1.5]}
       >
-        <ambientLight intensity={0.4} />
-        <pointLight position={[4, 4, 4]} intensity={1.2} color="#5EEAD4" />
-        <pointLight position={[-4, -2, -4]} intensity={0.6} color="#A78BFA" />
-        <InnerGlow mouse={mouse} />
-        <GlassOrb mouse={mouse} />
-        <ParticleField mouse={mouse} />
+        {/* Studio Lighting Setup for Anatomical 3D Mesh */}
+        <ambientLight intensity={1.2} />
+        <directionalLight position={[8, 12, 8]} intensity={2.0} color="#ffffff" />
+        <directionalLight position={[-8, -6, -6]} intensity={1.0} color="#A78BFA" />
+        <directionalLight position={[0, -10, 5]} intensity={0.6} color="#2DD4BF" />
+        <pointLight position={[0, 0, 8]} intensity={1.2} color="#ffffff" />
+        
+        <Suspense fallback={null}>
+          <SolidBrain mouse={mouse} />
+        </Suspense>
       </Canvas>
     </div>
   );
 }
+

@@ -1,16 +1,17 @@
 from typing import Dict, Any, Optional
 
 def calculate_mental_health_risk(
-    steps: int,
-    screen_time_minutes: int,
-    sleep_hours: float,
-    sleep_quality_percent: int,
-    heart_rate_bpm: Optional[int],
-    hrv_ms: Optional[float],
-    social_app_minutes: int,
-    notification_count: int,
+    steps: int = 5000,
+    screen_time_minutes: int = 120,
+    sleep_hours: float = 7.0,
+    sleep_quality_percent: int = 75,
+    heart_rate_bpm: Optional[int] = None,
+    hrv_ms: Optional[float] = None,
+    social_app_minutes: int = 30,
+    notification_count: int = 25,
     phq9_score: Optional[int] = None
 ) -> Dict[str, Any]:
+
     """
     Calculates mental health risk level, confidence, and contributing factors based on mobile telemetry.
     

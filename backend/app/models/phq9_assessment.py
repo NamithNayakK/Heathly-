@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
@@ -33,4 +33,8 @@ class PHQ9Assessment(Base):
     cognitive_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     physical_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     functional_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Consultant review fields
+    clinical_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

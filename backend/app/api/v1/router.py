@@ -1,9 +1,12 @@
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import admin, assessment, auth, chat, emotion, forum, webhook, multimodal, bluetooth
+from app.api.v1.endpoints import admin, assessment, auth, bluetooth, chat, consultant, emotion, forum, google_fit, mood_log, multimodal, webhook
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(google_fit.router, prefix="/auth/google-fit", tags=["google-fit"])
+
+api_router.include_router(mood_log.router, prefix="/mood-logs", tags=["mood-logs"])
 api_router.include_router(assessment.router, prefix="/assessment", tags=["assessment"])
 api_router.include_router(emotion.router, prefix="/emotion", tags=["emotion"])
 api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
@@ -11,6 +14,7 @@ api_router.include_router(forum.router, prefix="/forum", tags=["forum"])
 api_router.include_router(multimodal.router, prefix="/multimodal", tags=["multimodal"])
 api_router.include_router(bluetooth.router, prefix="/bluetooth", tags=["bluetooth"])
 api_router.include_router(webhook.router, tags=["webhook"])
+api_router.include_router(consultant.router, prefix="/consultant", tags=["consultant"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 
 

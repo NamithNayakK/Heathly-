@@ -4,11 +4,13 @@ import { motion } from "framer-motion";
 import {
   Activity, AlertTriangle, Brain, CheckCircle2, ChevronRight,
   ClipboardList, FileText, MessageSquare, RefreshCw,
-  Shield, TrendingUp, Upload, Zap, Battery, Heart, Radio
+  Shield, Sparkles, Smartphone, TrendingUp, Upload, Zap, Battery, Heart, Radio
 } from "lucide-react";
 import { api } from "../lib/api";
 import ConsultantDashboard from "./ConsultantDashboard";
 import AdminDashboard from "./AdminDashboard";
+import GoogleFitPipelineCard from "../components/GoogleFitPipelineCard";
+
 
 /* ── Animated radial risk gauge ── */
 function RiskGauge({ score, label }) {
@@ -109,12 +111,12 @@ function ModalityBtn({ icon: Icon, label, color, path, navigate }) {
 }
 
 export default function DashboardPage() {
-  const role = localStorage.getItem("role") || "patient";
+  const role = sessionStorage.getItem("role") || localStorage.getItem("role") || "patient";
   if (role === "consultant") return <ConsultantDashboard />;
   if (role === "admin")      return <AdminDashboard />;
 
   const navigate   = useNavigate();
-  const userName   = localStorage.getItem("full_name") || "User";
+  const userName   = sessionStorage.getItem("full_name") || localStorage.getItem("full_name") || "User";
   const [dashData, setDashData] = useState(null);
   const [history,  setHistory]  = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -189,24 +191,28 @@ export default function DashboardPage() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <div className="page-title">Good to see you, {userName.split(" ")[0]} 👋</div>
-          <div className="page-subtitle">Here's your wellness picture for today</div>
+          <div className="page-title font-display" style={{ fontSize: 26, fontWeight: 500, color: "#F5F0EB" }}>
+            Welcome back, {userName.split(" ")[0]} 🌿
+          </div>
+          <div className="page-subtitle" style={{ color: "#94A3B8" }}>
+            Personal pattern tracker & daily reflection summary
+          </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
           <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
             <RefreshCw size={13} style={loading ? { animation: "spin 1s linear infinite" } : {}} />
             Refresh
           </button>
-          <button className="btn btn-primary btn-sm" onClick={() => navigate("/assessment")}>
-            <ClipboardList size={13} /> New Check-in
+          <button className="btn btn-primary btn-sm" onClick={() => navigate("/assessment")} style={{ background: "linear-gradient(135deg, #D4A574, #A0785A)", color: "#0B1120" }}>
+            <ClipboardList size={13} /> Check-In Journal
           </button>
         </div>
       </div>
 
       {/* Alerts */}
       {alerts.map((a, i) => (
-        <div key={i} className="alert alert-warn">
-          <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        <div key={i} className="alert alert-info" style={{ background: "rgba(212,165,116,0.12)", borderColor: "rgba(212,165,116,0.25)", color: "#D4A574" }}>
+          <Sparkles size={14} style={{ flexShrink: 0, marginTop: 1 }} />
           <span>{a}</span>
         </div>
       ))}
@@ -222,16 +228,16 @@ export default function DashboardPage() {
 
             {/* [1] LARGE: Wellness score — spans 1 col, 2 rows */}
             <motion.div
-              className="bento-card card-accent-teal"
-              style={{ gridRow: "span 2", display: "flex", flexDirection: "column", gap: 20 }}
+              className="bento-card"
+              style={{ gridRow: "span 2", display: "flex", flexDirection: "column", gap: 20, borderTop: "2px solid #D4A574" }}
               initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
             >
               <div>
-                <div className="section-title" style={{ marginBottom: 8 }}>Wellness Index</div>
+                <div className="section-title" style={{ marginBottom: 8, color: "#D4A574" }}>Gentle Wellness Index</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontSize: 15, fontWeight: 600 }}>{risk?.includes("Pending") ? risk : `${risk} Risk`}</span>
-                  <span className={`badge ${risk?.toLowerCase().includes("low") ? "badge-live" : risk?.toLowerCase().includes("medium") ? "badge-amber" : risk?.toLowerCase().includes("high") ? "badge-rose" : "badge-muted"}`}>
+                  <span style={{ fontSize: 15, fontWeight: 500, fontFamily: "Fraunces, serif" }}>{risk?.includes("Pending") ? risk : `State: ${risk}`}</span>
+                  <span className="badge badge-teal" style={{ background: "rgba(212,165,116,0.15)", color: "#D4A574" }}>
                     {wellness !== null && wellness !== undefined ? `${wellness}` : "Pending"}
                   </span>
                 </div>
@@ -302,11 +308,11 @@ export default function DashboardPage() {
                 <ModalityBtn icon={ClipboardList} label="PHQ-9" color="var(--teal)" path="/assessment" navigate={navigate} />
                 <ModalityBtn icon={FileText} label="Records" color="var(--emerald)" path="/health-report" navigate={navigate} />
                 <ModalityBtn icon={MessageSquare} label="Chat AI" color="var(--lav)" path="/chat" navigate={navigate} />
-                <ModalityBtn icon={Activity} label="Sensors" color="var(--blue)" path="/sensor" navigate={navigate} />
+                <ModalityBtn icon={Smartphone} label="Phone Sensors" color="var(--blue)" path="/phone-data" navigate={navigate} />
               </div>
             </motion.div>
 
-            {/* [3] Sensor status */}
+            {/* [3] Smartphone Sensor Status */}
             <motion.div
               className="bento-card card-accent-lav"
               style={{ display: "flex", flexDirection: "column", gap: 14 }}
@@ -314,39 +320,52 @@ export default function DashboardPage() {
               transition={{ duration: 0.8, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div className="section-title" style={{ marginBottom: 0 }}>Live Sensors</div>
-                <span className={`badge ${bleStatus.connected ? "badge-live" : "badge-muted"}`} style={{ fontSize: 9 }}>
-                  <span className={`status-dot ${bleStatus.connected ? "live" : "idle"}`} style={{ width: 5, height: 5 }} />
-                  {bleStatus.connected ? "Online" : "Offline"}
+                <div className="section-title" style={{ marginBottom: 0 }}>Phone Telemetry</div>
+                <span className="badge badge-live" style={{ fontSize: 9 }}>
+                  <span className="status-dot live" style={{ width: 5, height: 5 }} />
+                  Active
                 </span>
               </div>
-              {bleStatus.connected ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Heart size={16} style={{ color: "var(--rose)", fill: "var(--rose)", animation: "pulse 1s infinite" }} />
-                      <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "IBM Plex Sans" }}>{liveTel?.telemetry?.heart_rate || 76}</span>
-                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>BPM</span>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 9, color: "var(--text-muted)", fontFamily: "IBM Plex Mono" }}>SpO2</div>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>{liveTel?.telemetry?.spo2 || 98}%</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Smartphone size={18} style={{ color: "var(--cyan)" }} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>Smartphone & Google Fit</div>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "IBM Plex Mono" }}>
+                        {dashData?.sensors_summary?.data_source ? `Source: ${dashData.sensors_summary.data_source.replace("_", " ")}` : "WiFi & Sensor Monitor"}
+                      </div>
                     </div>
                   </div>
-                  <div className="meter-bar" style={{ height: 3 }}>
-                    <div className="meter-fill lav" style={{ width: `${(liveTel?.ai_analysis?.stress_index || 0.34) * 100}%` }} />
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    Stress index: {Math.round((liveTel?.ai_analysis?.stress_index || 0.34) * 100)}%
-                  </div>
                 </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, padding: "12px 0", textAlign: "center" }}>
-                  <Radio size={20} style={{ color: "var(--text-muted)" }} />
-                  <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>No device paired</span>
-                  <button className="btn btn-secondary btn-xs" onClick={() => navigate("/sensor")}>Pair device</button>
-                </div>
-              )}
+
+                {dashData?.sensors_summary ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, background: "rgba(255,255,255,0.03)", padding: "8px 10px", borderRadius: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase" }}>Steps</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--emerald)" }}>{dashData.sensors_summary.steps ?? "--"}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase" }}>Sleep</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--violet)" }}>{dashData.sensors_summary.sleep_duration_hours ? `${dashData.sensors_summary.sleep_duration_hours}h` : "--"}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9, color: "var(--text-muted)", textTransform: "uppercase" }}>Heart</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--rose)" }}>{dashData.sensors_summary.heart_rate ? `${dashData.sensors_summary.heart_rate} bpm` : "--"}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, background: "rgba(255,255,255,0.03)", padding: "8px 10px", borderRadius: 8 }}>
+                    <span style={{ color: "var(--text-secondary)" }}>Continuous Monitoring</span>
+                    <span style={{ color: "var(--teal)", fontWeight: 600 }}>Active Stream</span>
+                  </div>
+                )}
+
+                <button className="btn btn-secondary btn-xs" onClick={() => navigate("/phone-data")} style={{ width: "100%", justifyContent: "center" }}>
+                  Open Smartphone Console
+                </button>
+
+              </div>
             </motion.div>
 
             {/* [4] Upload record */}
@@ -380,7 +399,11 @@ export default function DashboardPage() {
 
           </div>
 
+          {/* ── GOOGLE FIT & MANUAL SENSOR PIPELINE ── */}
+          <GoogleFitPipelineCard onSyncSuccess={load} />
+
           {/* ── ASSESSMENT HISTORY ── */}
+
           <motion.div
             className="bento-card"
             initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}

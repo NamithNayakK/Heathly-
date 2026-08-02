@@ -34,7 +34,14 @@ def analyze_mental_state(answers: list[int]) -> MentalStatePrediction:
         logits = model(torch.tensor([answers], dtype=torch.long, device=device))
         probs = F.softmax(logits, dim=-1).squeeze(0).cpu().tolist()
 
-    id2label = {int(key): value for key, value in metadata["id2label"].items()}
+    if "id2label" in metadata and isinstance(metadata["id2label"], dict):
+        id2label = {int(key): value for key, value in metadata["id2label"].items()}
+    elif "label2id" in metadata and isinstance(metadata["label2id"], dict):
+        id2label = {int(value): key for key, value in metadata["label2id"].items()}
+    else:
+        id2label = {0: "stable", 1: "mild_distress", 2: "moderate_distress", 3: "severe_distress", 4: "crisis"}
+
     best_index = max(range(len(probs)), key=lambda index: probs[index])
-    probabilities = {id2label[index]: float(probability) for index, probability in enumerate(probs)}
-    return MentalStatePrediction(label=id2label[best_index], confidence=float(probs[best_index]), probabilities=probabilities)
+    probabilities = {id2label.get(index, f"class_{index}"): float(probability) for index, probability in enumerate(probs)}
+    best_label = id2label.get(best_index, "stable")
+    return MentalStatePrediction(label=best_label, confidence=float(probs[best_index]), probabilities=probabilities)

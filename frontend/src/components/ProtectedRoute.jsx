@@ -5,8 +5,8 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
-  const token = localStorage.getItem('token');
-  const role = localStorage.getItem('role') || 'patient';
+  const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+  const role = sessionStorage.getItem('role') || localStorage.getItem('role') || 'patient';
 
   useEffect(() => {
     if (!token) {

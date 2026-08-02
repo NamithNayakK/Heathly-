@@ -123,20 +123,22 @@ export default function LandingPage() {
 
       {/* ── HERO ── */}
       <section style={{ position: "relative", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", paddingTop: 60, overflow: "hidden" }}>
-        {/* 3D Scene or fallback */}
-        {!prefersReduced ? (
-          <Suspense fallback={<div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 60% 40%, rgba(94,234,212,0.12) 0%, transparent 60%)" }} />}>
-            <HeroScene />
-          </Suspense>
-        ) : (
-          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 60% 40%, rgba(94,234,212,0.15) 0%, transparent 60%)" }} />
-        )}
+        {/* 3D Scene container with reduced visual weight */}
+        <div style={{ position: "absolute", inset: 0, zIndex: 1, opacity: 0.38, filter: "grayscale(25%) contrast(1.1)", pointerEvents: "none" }}>
+          {!prefersReduced ? (
+            <Suspense fallback={<div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 60% 40%, rgba(94,234,212,0.12) 0%, transparent 60%)" }} />}>
+              <HeroScene />
+            </Suspense>
+          ) : (
+            <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 60% 40%, rgba(94,234,212,0.15) 0%, transparent 60%)" }} />
+          )}
+        </div>
         {/* Gradient overlays for depth */}
-        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at 30% 70%, rgba(167,139,250,0.08) 0%, transparent 55%)", pointerEvents: "none" }} />
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 200, background: "linear-gradient(to bottom, transparent, var(--bg-base))", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", inset: 0, zIndex: 1, background: "radial-gradient(ellipse at 30% 70%, rgba(167,139,250,0.08) 0%, transparent 55%)", pointerEvents: "none" }} />
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 200, zIndex: 1, background: "linear-gradient(to bottom, transparent, var(--bg-base))", pointerEvents: "none" }} />
 
-        {/* Content */}
-        <div style={{ position: "relative", zIndex: 2, textAlign: "center", maxWidth: 740, padding: "0 24px" }}>
+        {/* Content with radial gradient scrim */}
+        <div className="hero-text-wrapper" style={{ textAlign: "center", maxWidth: 740, padding: "0 24px" }}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: [0.16,1,0.3,1] }}>
             <div className="landing-hero-badge" style={{ marginBottom: 28 }}>
               <Brain size={11} /> AI-Assisted Mental Wellness · v2.0
@@ -146,7 +148,7 @@ export default function LandingPage() {
           <motion.h1
             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, delay: 0.1, ease: [0.16,1,0.3,1] }}
-            style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "clamp(2.6rem,6vw,4.8rem)", fontWeight: 700, lineHeight: 1.05, letterSpacing: "-0.04em", margin: "0 0 20px" }}
+            style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "clamp(2.6rem,6vw,4.8rem)", fontWeight: 700, lineHeight: 1.05, letterSpacing: "-0.04em", margin: "0 0 20px", textShadow: "0 4px 24px rgba(0,0,0,0.6)" }}
           >
             Your mind has patterns.{" "}
             <span style={{ background: "linear-gradient(135deg, #5EEAD4, #A78BFA)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
@@ -157,7 +159,7 @@ export default function LandingPage() {
           <motion.p
             initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.9, delay: 0.2, ease: [0.16,1,0.3,1] }}
-            style={{ fontSize: 17, color: "var(--text-secondary)", lineHeight: 1.75, marginBottom: 40, maxWidth: 560, margin: "0 auto 40px" }}
+            style={{ fontSize: 17, color: "var(--text-secondary)", lineHeight: 1.75, marginBottom: 40, maxWidth: 560, margin: "0 auto 40px", textShadow: "0 4px 24px rgba(0,0,0,0.6)" }}
           >
             Healthly fuses PHQ-9 assessments, lifestyle sensors, AI emotion analysis, and optional counselor support into one calm, continuous picture of your wellbeing.
           </motion.p>
@@ -165,7 +167,7 @@ export default function LandingPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.3, ease: [0.16,1,0.3,1] }}
-            style={{ display: "flex", gap: 12, justifyContent: "center", alignItems: "center", flexWrap: "wrap" }}
+            style={{ display: "flex", gap: 12, justifyContent: "center", alignItems: "center", flexWrap: "wrap", position: "relative", zIndex: 3 }}
           >
             <Link to="/login" style={{ textDecoration: "none" }}>
               <motion.button className="btn-cta" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }} transition={{ duration: 0.6, ease: [0.16,1,0.3,1] }}>

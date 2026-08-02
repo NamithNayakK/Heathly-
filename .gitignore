@@ -40,9 +40,12 @@ Thumbs.db
 *.db
 *.sqlite3
 
-# Environment variables
+# Environment variables & secrets
 .env
 .env.local
+credentials.json
+token.json
+datasets/
 
 # Large ML model files
 *.safetensors

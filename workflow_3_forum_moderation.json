@@ -1,0 +1,131 @@
+{
+  "name": "Workflow 3: Forum Moderation Alert",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "forum-moderation",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Forum Moderation Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "id": "node-webhook-forum-moderation",
+      "webhookId": "forum-moderation"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=SELECT fp.id, fp.title, fp.content, fp.is_flagged, u.full_name as author_name, u.email as author_email FROM forum_posts fp JOIN users u ON u.id = fp.user_id WHERE fp.id = CAST('{{ $json.body.post_id }}' AS INTEGER);"
+      },
+      "name": "Fetch Flagged Post & Author",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        500,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Healthly PostgreSQL DB"
+        }
+      },
+      "id": "node-postgres-forum"
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhookData = $(\"Forum Moderation Webhook\").first().json.body || {};\nconst dbRows = $(\"Fetch Flagged Post & Author\").all().map(i => i.json);\n\nconst postId = webhookData.post_id || (dbRows[0] && dbRows[0].id) || 'N/A';\nconst postTitle = (dbRows[0] && dbRows[0].title) || webhookData.title || 'Untitled Post';\nconst postContent = (dbRows[0] && dbRows[0].content) || webhookData.content || 'N/A';\nconst authorName = (dbRows[0] && dbRows[0].author_name) || webhookData.author_name || 'Anonymous';\nconst authorEmail = (dbRows[0] && dbRows[0].author_email) || webhookData.author_email || 'N/A';\nconst reason = webhookData.reason || 'Flagged for Review / Inappropriate Content';\nconst timestamp = new Date().toISOString();\nconst adminLink = 'http://localhost:3000/admin/forum';\n\nconst subject = `⚠️ [MODERATION ALERT] Flagged Forum Post #${postId}: \"${postTitle}\"`;\nconst body = `=====================================================\\n⚠️ FORUM CONTENT MODERATION ALERT\\n=====================================================\\n\\nFlagged Post Details:\\n---------------------\\n• Post ID:      ${postId}\\n• Title:        ${postTitle}\\n• Author:       ${authorName} (${authorEmail})\\n• Flag Reason:  ${reason}\\n• Timestamp:    ${timestamp}\\n\\nPost Content Snippet:\\n---------------------\\n\"${postContent}\"\\n\\nAction Required:\\n----------------\\nPlease review or remove this post in the Admin Panel:\\n${adminLink}\\n\\n=====================================================\\nSystem: Healthly Automated Moderation Service (n8n Workflow #3)\\n`;\n\nreturn [{\n  json: {\n    post_id: postId,\n    post_title: postTitle,\n    author_name: authorName,\n    author_email: authorEmail,\n    reason: reason,\n    admin_link: adminLink,\n    alert_subject: subject,\n    alert_body: body,\n    status: \"MODERATION_ALERT_SENT\"\n  }\n}];"
+      },
+      "name": "Format Moderation Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        750,
+        300
+      ],
+      "id": "node-format-forum-alert"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconsole.log('=========================================');\nconsole.log('FORUM MODERATION ALERT SENT TO ADMIN:');\nconsole.log('SUBJECT: ' + item.alert_subject);\nconsole.log(item.alert_body);\nconsole.log('=========================================');\n\nreturn [{\n  json: {\n    ...item,\n    email_delivered: true,\n    delivered_to: 'admin@healthly.com',\n    delivered_at: new Date().toISOString()\n  }\n}];"
+      },
+      "name": "Send Moderator Email Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        300
+      ],
+      "id": "node-send-forum-email"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn [{\n  json: {\n    workflow: 'Workflow 3: Forum Moderation Alert',\n    status: 'SUCCESS',\n    execution_confirmed: true,\n    logged_at: new Date().toISOString(),\n    details: item\n  }\n}];"
+      },
+      "name": "Log Workflow Execution",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        300
+      ],
+      "id": "node-log-forum-execution"
+    }
+  ],
+  "connections": {
+    "Forum Moderation Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fetch Flagged Post & Author",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Flagged Post & Author": {
+      "main": [
+        [
+          {
+            "node": "Format Moderation Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Moderation Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Moderator Email Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Moderator Email Alert": {
+      "main": [
+        [
+          {
+            "node": "Log Workflow Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

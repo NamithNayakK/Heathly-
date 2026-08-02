@@ -7,14 +7,12 @@ export default function Navbar() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const token = localStorage.getItem('token');
-  const userName = localStorage.getItem('full_name') || 'User';
+  const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+  const userName = sessionStorage.getItem('full_name') || localStorage.getItem('full_name') || 'User';
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user_id');
-    localStorage.removeItem('full_name');
-    localStorage.removeItem('email');
+    sessionStorage.clear();
+    localStorage.clear();
     setIsOpen(false);
     setIsDropdownOpen(false);
     navigate('/login');

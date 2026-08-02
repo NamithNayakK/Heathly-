@@ -1,333 +1,608 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
-  Activity, AlertTriangle, BarChart2, ChevronRight, Clock,
-  Database, RefreshCw, Search, Server, Settings, Shield,
-  TrendingUp, User, UserCog, Users, Zap
+  Activity, AlertTriangle, BarChart2, Check, CheckCircle2,
+  ChevronRight, Clock, Cpu, FileText, Filter, MessageSquare,
+  RefreshCw, Search, Shield, ShieldAlert, ShieldCheck,
+  Smartphone, Trash2, User, UserCheck, UserCog, Users, Zap
 } from "lucide-react";
 import { api } from "../lib/api";
 
-function StatCard({ label, value, icon: Icon, color, subtitle }) {
-  return (
-    <div className="card card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span className="stat-label">{label}</span>
-        <div style={{ padding: 6, borderRadius: 6, background: `${color}18` }}>
-          <Icon style={{ width: 14, height: 14, color }} />
-        </div>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-        <span className="stat-value">{value}</span>
-      </div>
-      {subtitle && (
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{subtitle}</div>
-      )}
-    </div>
-  );
-}
+// Config-driven static model status definitions
+const MODEL_CONFIGS = [
+  {
+    id: "xgboost",
+    name: "XGBoost Risk Classifier",
+    category: "Clinical Risk",
+    status: "Active",
+    metricLabel: "Accuracy",
+    metricValue: "94%",
+    description: "Evaluates multidimensional clinical risk level from patient telemetry and survey data.",
+    badgeClass: "badge-live",
+    color: "var(--emerald)",
+  },
+  {
+    id: "distilbert",
+    name: "DistilBERT Emotion Classifier",
+    category: "NLP & Sentiment",
+    status: "Active",
+    metricLabel: "Accuracy",
+    metricValue: "77%",
+    description: "Transformer model analyzing free-text journal entries and conversation semantics.",
+    badgeClass: "badge-live",
+    color: "var(--teal)",
+  },
+  {
+    id: "lstm",
+    name: "LSTM Mental State Classifier",
+    category: "Temporal State",
+    status: "Active",
+    metricLabel: "Accuracy",
+    metricValue: "69%",
+    description: "Recurrent neural network tracking longitudinal mood trends over time.",
+    badgeClass: "badge-live",
+    color: "var(--cyan)",
+  },
+  {
+    id: "sensorbilstm",
+    name: "SensorBiLSTM (Multimodal)",
+    category: "Biometric Telemetry",
+    status: "Prototype",
+    metricLabel: "Dataset",
+    metricValue: "Prototype - synthetic training data",
+    description: "Bi-directional LSTM fusing continuous physiological sensor telemetry.",
+    badgeClass: "badge-amber",
+    color: "var(--amber)",
+  },
+  {
+    id: "deepface",
+    name: "DeepFaceCNN (Facial Emotion)",
+    category: "Computer Vision",
+    status: "Prototype",
+    metricLabel: "Dataset",
+    metricValue: "Prototype - synthetic training data",
+    description: "Convolutional neural network for facial landmark & micro-expression detection.",
+    badgeClass: "badge-amber",
+    color: "var(--rose)",
+  },
+  {
+    id: "wav2vec2",
+    name: "Wav2Vec2 (Speech Emotion)",
+    category: "Audio Processing",
+    status: "Prototype",
+    metricLabel: "Dataset",
+    metricValue: "Prototype - synthetic training data",
+    description: "Acoustic speech embedding model for vocal tone and affect analysis.",
+    badgeClass: "badge-amber",
+    color: "var(--violet)",
+  },
+];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
+  const [flaggedPosts, setFlaggedPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [actionMessage, setActionMessage] = useState(null);
+
+  // User management state
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
-  const [editingRole, setEditingRole] = useState(null);
-  const userName = localStorage.getItem("full_name") || "Admin";
+  const [pairingFilter, setPairingFilter] = useState("all");
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [selectedRole, setSelectedRole] = useState("");
+  const [updatingUser, setUpdatingUser] = useState(false);
 
-  const load = async () => {
+  const userName = sessionStorage.getItem("full_name") || localStorage.getItem("full_name") || "Admin";
+
+  const loadData = async () => {
     setLoading(true);
     try {
-      const [statsData, usersData] = await Promise.all([
+      const [statsData, usersData, flaggedData] = await Promise.all([
         api.getAdminStats(),
         api.getAdminUsers(),
+        api.getFlaggedForumPosts().catch(() => ({ items: [] })),
       ]);
       setStats(statsData);
       setUsers(usersData.users || []);
+      setFlaggedPosts(flaggedData.items || []);
     } catch (e) {
-      console.error("Admin load error:", e);
+      console.error("Admin dashboard load error:", e);
+      showMessage("Error loading admin data: " + e.message, "error");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const handleRoleChange = async (userId, newRole) => {
+  const showMessage = (msg, type = "success") => {
+    setActionMessage({ text: msg, type });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
+  // User Role Update Handler
+  const handleSaveRole = async (userId) => {
+    if (!selectedRole) return;
+    setUpdatingUser(true);
     try {
-      await api.updateUserRole(userId, newRole);
-      setEditingRole(null);
-      load();
+      await api.updateUserRole(userId, selectedRole);
+      setEditingUserId(null);
+      showMessage(`User role updated to "${selectedRole}".`);
+      loadData();
     } catch (e) {
-      alert("Failed to update role: " + e.message);
+      showMessage("Failed to update user role: " + e.message, "error");
+    } finally {
+      setUpdatingUser(false);
     }
   };
 
-  const filteredUsers = users.filter(u => {
-    const matchesSearch = u.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || u.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === "all" || u.role === roleFilter;
-    return matchesSearch && matchesRole;
-  });
-
-  // Mock system health data
-  const systemHealth = {
-    apiLatency: '42ms',
-    uptime: '99.97%',
-    activeConnections: 12,
-    errorRate: '0.02%',
+  // Forum Moderation Handlers
+  const handleApprovePost = async (postId) => {
+    try {
+      await api.approveForumPost(postId);
+      setFlaggedPosts((prev) => prev.filter((p) => p.id !== postId));
+      showMessage("Forum post approved and unflagged.");
+    } catch (e) {
+      showMessage("Failed to approve post: " + e.message, "error");
+    }
   };
 
-  const recentActivity = [
-    { user: 'Sarah Johnson', action: 'Completed PHQ-9 assessment', time: '5 min ago', type: 'assessment' },
-    { user: 'Dr. Michael Chen', action: 'Reviewed patient sensor data', time: '12 min ago', type: 'review' },
-    { user: 'Emily Davis', action: 'New user registered as patient', time: '28 min ago', type: 'register' },
-    { user: 'James Wilson', action: 'Uploaded health record', time: '45 min ago', type: 'upload' },
-    { user: 'Dr. Lisa Park', action: 'Updated consultation notes', time: '1 hr ago', type: 'notes' },
-  ];
+  const handleRemovePost = async (postId) => {
+    if (!window.confirm("Are you sure you want to permanently remove this post?")) return;
+    try {
+      await api.deleteForumPost(postId);
+      setFlaggedPosts((prev) => prev.filter((p) => p.id !== postId));
+      showMessage("Forum post permanently removed.");
+    } catch (e) {
+      showMessage("Failed to remove post: " + e.message, "error");
+    }
+  };
+
+  // Filtered Users List
+  const filteredUsers = users.filter((u) => {
+    const term = searchTerm.toLowerCase();
+    const matchSearch = u.full_name?.toLowerCase().includes(term) || u.email?.toLowerCase().includes(term);
+    const matchRole = roleFilter === "all" || u.role === roleFilter;
+    const matchPairing =
+      pairingFilter === "all" ||
+      (pairingFilter === "paired" && u.paired) ||
+      (pairingFilter === "unpaired" && !u.paired);
+    return matchSearch && matchRole && matchPairing;
+  });
+
+  // Calculate Risk Distribution percentages
+  const riskDist = stats?.risk_distribution || { Low: 0, Medium: 0, High: 0, Unassessed: 0 };
+  const totalEvaluatedPatients = (riskDist.Low || 0) + (riskDist.Medium || 0) + (riskDist.High || 0) + (riskDist.Unassessed || 0);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 1200, margin: "0 auto", paddingBottom: 40 }}>
+      {/* Header Banner */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <div className="page-title">Platform Administration</div>
-          <div className="page-subtitle">System overview and user management — {userName}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span className="badge badge-lav" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              <Shield style={{ width: 12, height: 12 }} /> Admin Workspace
+            </span>
+          </div>
+          <div className="page-title" style={{ marginTop: 4 }}>Platform Administration</div>
+          <div className="page-subtitle">
+            System control panel, risk overview, user role management & forum moderation — {userName}
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-          <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>
-            <RefreshCw style={{ width: 13, height: 13, ...(loading ? { animation: 'spin 1s linear infinite' } : {}) }} />
-            Refresh
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={() => navigate('/platform-settings')}>
-            <Settings style={{ width: 13, height: 13 }} /> Settings
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          <button className="btn btn-secondary btn-sm" onClick={loadData} disabled={loading}>
+            <RefreshCw style={{ width: 13, height: 13, ...(loading ? { animation: "spin 1s linear infinite" } : {}) }} />
+            Refresh Data
           </button>
         </div>
       </div>
 
-      {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {[200, 120, 80].map((h, i) => <div key={i} className="skeleton" style={{ height: h, borderRadius: 14 }} />)}
+      {actionMessage && (
+        <div className={`alert ${actionMessage.type === "error" ? "alert-error" : "alert-success"}`}>
+          {actionMessage.type === "error" ? <AlertTriangle size={14} /> : <CheckCircle2 size={14} />}
+          <span>{actionMessage.text}</span>
+        </div>
+      )}
+
+      {loading && !stats ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {[160, 240, 200].map((h, i) => (
+            <div key={i} className="skeleton" style={{ height: h, borderRadius: 14 }} />
+          ))}
         </div>
       ) : (
         <>
-          {/* KPI Cards */}
-          <div className="grid-4" style={{ gap: 12 }}>
-            <StatCard label="Total Users" value={stats?.total_users || 0} icon={Users} color="var(--cyan)" subtitle="All registered accounts" />
-            <StatCard label="Patients" value={stats?.patients || 0} icon={User} color="var(--emerald)" subtitle="Active patient profiles" />
-            <StatCard label="Consultants" value={stats?.consultants || 0} icon={Activity} color="var(--blue)" subtitle="Clinical staff" />
-            <StatCard label="Assessments" value={stats?.total_assessments || 0} icon={BarChart2} color="var(--violet)" subtitle="PHQ-9 submissions" />
+          {/* =========================================================================
+              SECTION 1: SYSTEM-WIDE RISK OVERVIEW & ACCESSIBILITY STATS
+             ========================================================================= */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Activity style={{ width: 16, height: 16, color: "var(--teal)" }} />
+              <div className="section-title" style={{ marginBottom: 0 }}>System-Wide Risk & Platform Overview</div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+              {/* User Roles Card */}
+              <div className="card card-sm" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", borderTop: "3px solid var(--cyan)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="stat-label">User Accounts by Role</span>
+                  <Users style={{ width: 16, height: 16, color: "var(--cyan)" }} />
+                </div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", margin: "8px 0", fontFamily: "IBM Plex Sans" }}>
+                  {stats?.total_users || 0} <span style={{ fontSize: 11, fontWeight: 400, color: "var(--text-muted)" }}>Total</span>
+                </div>
+                <div style={{ display: "flex", gap: 8, fontSize: 11, borderTop: "1px solid var(--bg-border)", paddingTop: 8 }}>
+                  <span style={{ color: "var(--emerald)" }}><strong>{stats?.patients || 0}</strong> Patients</span>
+                  <span style={{ color: "var(--blue)" }}><strong>{stats?.consultants || 0}</strong> Consultants</span>
+                  <span style={{ color: "var(--violet)" }}><strong>{stats?.admins || 0}</strong> Admins</span>
+                </div>
+              </div>
+
+              {/* Patient Risk Distribution Card */}
+              <div className="card card-sm" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", borderTop: "3px solid var(--amber)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="stat-label">Patient Risk Distribution</span>
+                  <ShieldAlert style={{ width: 16, height: 16, color: "var(--amber)" }} />
+                </div>
+                <div style={{ margin: "8px 0" }}>
+                  <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden", background: "var(--bg-elevated)", gap: 2 }}>
+                    <div style={{ width: `${totalEvaluatedPatients ? (riskDist.Low / totalEvaluatedPatients) * 100 : 0}%`, background: "var(--emerald)" }} title={`Low Risk: ${riskDist.Low}`} />
+                    <div style={{ width: `${totalEvaluatedPatients ? (riskDist.Medium / totalEvaluatedPatients) * 100 : 0}%`, background: "var(--amber)" }} title={`Medium Risk: ${riskDist.Medium}`} />
+                    <div style={{ width: `${totalEvaluatedPatients ? (riskDist.High / totalEvaluatedPatients) * 100 : 0}%`, background: "var(--rose)" }} title={`High Risk: ${riskDist.High}`} />
+                    <div style={{ width: `${totalEvaluatedPatients ? (riskDist.Unassessed / totalEvaluatedPatients) * 100 : 0}%`, background: "var(--text-muted)" }} title={`Unassessed: ${riskDist.Unassessed}`} />
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-muted)", fontFamily: "IBM Plex Mono" }}>
+                  <span style={{ color: "var(--emerald)" }}>Low: {riskDist.Low}</span>
+                  <span style={{ color: "var(--amber)" }}>Med: {riskDist.Medium}</span>
+                  <span style={{ color: "var(--rose)" }}>High: {riskDist.High}</span>
+                </div>
+              </div>
+
+              {/* Unresolved Reviews Card */}
+              <div className="card card-sm" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", borderTop: "3px solid var(--rose)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="stat-label">Pending Clinical Reviews</span>
+                  <AlertTriangle style={{ width: 16, height: 16, color: "var(--rose)" }} />
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, margin: "8px 0" }}>
+                  <span style={{ fontSize: 26, fontWeight: 700, color: (stats?.unresolved_reviews_count || 0) > 0 ? "var(--rose)" : "var(--emerald)", fontFamily: "IBM Plex Sans" }}>
+                    {stats?.unresolved_reviews_count || 0}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>needs human review</span>
+                </div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "IBM Plex Mono" }}>
+                  {(stats?.unresolved_reviews_count || 0) > 0 ? "Requires consultant attention" : "All flagged cases resolved"}
+                </div>
+              </div>
+
+              {/* Assessments Submitted Card */}
+              <div className="card card-sm" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", borderTop: "3px solid var(--violet)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="stat-label">PHQ-9 Assessments</span>
+                  <BarChart2 style={{ width: 16, height: 16, color: "var(--violet)" }} />
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "8px 0" }}>
+                  <span style={{ fontSize: 26, fontWeight: 700, color: "var(--text-primary)", fontFamily: "IBM Plex Sans" }}>
+                    {stats?.assessments_submitted?.all_time || stats?.total_assessments || 0}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>All-Time</span>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--teal)", fontWeight: 500, fontFamily: "IBM Plex Mono" }}>
+                  +{stats?.assessments_submitted?.last_7_days || 0} submitted in last 7 days
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Main Content: User Management + System Health */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 16 }}>
-
-            {/* User Management Table */}
-            <div className="card card-accent-violet" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div className="section-title" style={{ marginBottom: 0 }}>User Management</div>
-                <button className="btn btn-ghost btn-xs" onClick={() => navigate('/user-management')}>
-                  Full View <ChevronRight style={{ width: 11, height: 11 }} />
-                </button>
-              </div>
-
-              {/* Filters */}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: 'var(--text-muted)' }} />
-                  <input
-                    className="input-field"
-                    style={{ paddingLeft: 38 }}
-                    placeholder="Search users..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+          {/* =========================================================================
+              SECTION 2: USER MANAGEMENT TABLE
+             ========================================================================= */}
+          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <UserCog style={{ width: 18, height: 18, color: "var(--cyan)" }} />
+                <div>
+                  <div className="section-title" style={{ marginBottom: 0 }}>User Management</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Inspect accounts, manage role permissions & monitor telemetry device pairing</div>
                 </div>
-                <select
+              </div>
+              <span className="badge badge-muted" style={{ fontFamily: "IBM Plex Mono" }}>
+                Showing {filteredUsers.length} of {users.length} Users
+              </span>
+            </div>
+
+            {/* Controls Bar */}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ position: "relative", flex: 1, minWidth: 220 }}>
+                <Search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "var(--text-muted)" }} />
+                <input
                   className="input-field"
-                  style={{ width: 130 }}
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value)}
-                >
-                  <option value="all">All Roles</option>
-                  <option value="patient">Patients</option>
-                  <option value="consultant">Consultants</option>
-                  <option value="admin">Admins</option>
-                </select>
+                  style={{ paddingLeft: 38 }}
+                  placeholder="Search user by full name or email address..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
 
-              {/* Table */}
-              <div style={{ maxHeight: 380, overflowY: 'auto' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>User</th>
-                      <th>Email</th>
-                      <th>Role</th>
-                      <th>Joined</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.slice(0, 10).map(user => (
+              <select
+                className="input-field"
+                style={{ width: 140 }}
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+              >
+                <option value="all">All Roles</option>
+                <option value="patient">Patient</option>
+                <option value="consultant">Consultant</option>
+                <option value="admin">Admin</option>
+              </select>
+
+              <select
+                className="input-field"
+                style={{ width: 160 }}
+                value={pairingFilter}
+                onChange={(e) => setPairingFilter(e.target.value)}
+              >
+                <option value="all">All Device States</option>
+                <option value="paired">Device Paired</option>
+                <option value="unpaired">Not Paired</option>
+              </select>
+            </div>
+
+            {/* Users Table */}
+            <div style={{ overflowX: "auto" }}>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Email Address</th>
+                    <th>Role</th>
+                    <th>Device Status</th>
+                    <th>Registered</th>
+                    <th style={{ textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((user) => {
+                    const isEditing = editingUserId === user.id;
+                    return (
                       <tr key={user.id}>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{
-                              width: 26, height: 26, borderRadius: '50%',
-                              background: user.role === 'admin' ? 'linear-gradient(135deg, var(--violet), var(--rose))'
-                                : user.role === 'consultant' ? 'linear-gradient(135deg, var(--emerald), var(--blue))'
-                                : 'linear-gradient(135deg, var(--cyan), var(--blue))',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0
-                            }}>
-                              {user.full_name?.charAt(0)?.toUpperCase() || '?'}
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div
+                              style={{
+                                width: 30, height: 30, borderRadius: "50%",
+                                background:
+                                  user.role === "admin"
+                                    ? "linear-gradient(135deg, var(--violet), var(--rose))"
+                                    : user.role === "consultant"
+                                    ? "linear-gradient(135deg, var(--emerald), var(--blue))"
+                                    : "linear-gradient(135deg, var(--cyan), var(--blue))",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0,
+                              }}
+                            >
+                              {user.full_name?.charAt(0)?.toUpperCase() || "?"}
                             </div>
-                            <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12 }}>{user.full_name}</span>
+                            <div>
+                              <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>{user.full_name}</div>
+                              <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "IBM Plex Mono" }}>ID: #{user.id}</div>
+                            </div>
                           </div>
                         </td>
-                        <td style={{ fontSize: 11, fontFamily: 'IBM Plex Mono' }}>{user.email}</td>
+
+                        <td style={{ fontSize: 12, fontFamily: "IBM Plex Mono", color: "var(--text-secondary)" }}>
+                          {user.email}
+                        </td>
+
                         <td>
-                          {editingRole === user.id ? (
-                            <select
-                              className="input-field"
-                              style={{ padding: '3px 6px', fontSize: 11, width: 110 }}
-                              defaultValue={user.role}
-                              onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                              onBlur={() => setEditingRole(null)}
-                              autoFocus
-                            >
-                              <option value="patient">Patient</option>
-                              <option value="consultant">Consultant</option>
-                              <option value="admin">Admin</option>
-                            </select>
+                          {isEditing ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <select
+                                className="input-field"
+                                style={{ padding: "4px 8px", fontSize: 11, width: 120 }}
+                                value={selectedRole}
+                                onChange={(e) => setSelectedRole(e.target.value)}
+                              >
+                                <option value="patient">patient</option>
+                                <option value="consultant">consultant</option>
+                                <option value="admin">admin</option>
+                              </select>
+                              <button
+                                className="btn btn-primary btn-xs"
+                                onClick={() => handleSaveRole(user.id)}
+                                disabled={updatingUser}
+                              >
+                                {updatingUser ? "..." : "Save"}
+                              </button>
+                              <button
+                                className="btn btn-ghost btn-xs"
+                                onClick={() => setEditingUserId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           ) : (
                             <span
-                              className={`badge ${user.role === 'admin' ? 'badge-violet' : user.role === 'consultant' ? 'badge-cyan' : 'badge-live'}`}
-                              style={{ cursor: 'pointer' }}
-                              onClick={() => setEditingRole(user.id)}
-                              title="Click to change role"
+                              className={`badge ${
+                                user.role === "admin"
+                                  ? "badge-violet"
+                                  : user.role === "consultant"
+                                  ? "badge-blue"
+                                  : "badge-live"
+                              }`}
+                              style={{ cursor: "pointer" }}
+                              onClick={() => {
+                                setEditingUserId(user.id);
+                                setSelectedRole(user.role);
+                              }}
+                              title="Click to edit role"
                             >
                               {user.role}
                             </span>
                           )}
                         </td>
-                        <td style={{ fontSize: 10, fontFamily: 'IBM Plex Mono', color: 'var(--text-muted)' }}>
-                          {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
-                        </td>
+
                         <td>
+                          {user.paired ? (
+                            <span className="badge badge-teal" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <Smartphone style={{ width: 10, height: 10 }} /> Paired
+                            </span>
+                          ) : (
+                            <span className="badge badge-muted" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              Not Paired
+                            </span>
+                          )}
+                        </td>
+
+                        <td style={{ fontSize: 11, fontFamily: "IBM Plex Mono", color: "var(--text-muted)" }}>
+                          {user.created_at ? new Date(user.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                        </td>
+
+                        <td style={{ textAlign: "right" }}>
                           <button
                             className="btn btn-ghost btn-xs"
-                            onClick={() => setEditingRole(editingRole === user.id ? null : user.id)}
+                            onClick={() => {
+                              if (isEditing) {
+                                setEditingUserId(null);
+                              } else {
+                                setEditingUserId(user.id);
+                                setSelectedRole(user.role);
+                              }
+                            }}
                           >
-                            <UserCog style={{ width: 11, height: 11 }} />
+                            <UserCog style={{ width: 12, height: 12 }} /> Edit Role
                           </button>
                         </td>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    );
+                  })}
+                </tbody>
+              </table>
 
-              {/* Role Distribution */}
-              <div style={{ display: 'flex', gap: 12, padding: '12px 0 0', borderTop: '1px solid var(--bg-border)' }}>
-                {[
-                  { label: 'Patients', count: stats?.patients || 0, color: 'var(--emerald)' },
-                  { label: 'Consultants', count: stats?.consultants || 0, color: 'var(--cyan)' },
-                  { label: 'Admins', count: stats?.admins || 0, color: 'var(--violet)' },
-                ].map(item => (
-                  <div key={item.label} style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: item.color, fontFamily: 'IBM Plex Sans' }}>{item.count}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: 'IBM Plex Mono' }}>{item.label}</div>
-                    <div className="meter-bar" style={{ height: 3, marginTop: 6 }}>
-                      <div className="meter-fill" style={{
-                        width: `${(stats?.total_users ? (item.count / stats.total_users) * 100 : 0)}%`,
-                        background: item.color,
-                      }} />
-                    </div>
-                  </div>
-                ))}
+              {filteredUsers.length === 0 && (
+                <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-muted)", fontSize: 13 }}>
+                  No users matched your current search filters.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* =========================================================================
+              SECTION 3: FORUM MODERATION PANEL
+             ========================================================================= */}
+          <div className="card card-accent-rose" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <ShieldAlert style={{ width: 18, height: 18, color: "var(--rose)" }} />
+                <div>
+                  <div className="section-title" style={{ marginBottom: 0 }}>Forum Moderation</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Review and moderate community forum posts flagged for policy violation</div>
+                </div>
               </div>
+              <span className={`badge ${flaggedPosts.length > 0 ? "badge-rose" : "badge-live"}`}>
+                {flaggedPosts.length} Flagged {flaggedPosts.length === 1 ? "Post" : "Posts"}
+              </span>
             </div>
 
-            {/* Right Column */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* System Health */}
-              <div className="card card-accent-cyan" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div className="section-title" style={{ marginBottom: 0 }}>System Health</div>
-                {[
-                  { label: 'API Latency', value: systemHealth.apiLatency, icon: Zap, color: 'var(--emerald)' },
-                  { label: 'Uptime', value: systemHealth.uptime, icon: Server, color: 'var(--cyan)' },
-                  { label: 'Active Connections', value: systemHealth.activeConnections, icon: Activity, color: 'var(--blue)' },
-                  { label: 'Error Rate', value: systemHealth.errorRate, icon: Shield, color: 'var(--emerald)' },
-                ].map(item => (
-                  <div key={item.label} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '6px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid var(--bg-border)',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <item.icon style={{ width: 12, height: 12, color: item.color }} />
-                      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{item.label}</span>
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: item.color, fontFamily: 'IBM Plex Mono' }}>{item.value}</span>
-                  </div>
-                ))}
+            {flaggedPosts.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--text-muted)", background: "rgba(255,255,255,0.01)", borderRadius: 10, border: "1px dashed var(--bg-border)" }}>
+                <ShieldCheck style={{ width: 28, height: 28, color: "var(--emerald)", margin: "0 auto 8px" }} />
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>No Flagged Content</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>All forum discussion threads are in good standing.</div>
               </div>
-
-              {/* Recent Activity */}
-              <div className="card card-accent-rose" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div className="section-title" style={{ marginBottom: 0 }}>Recent Activity</div>
-                  <button className="btn btn-ghost btn-xs" onClick={() => navigate('/audit-logs')}>
-                    Logs <ChevronRight style={{ width: 11, height: 11 }} />
-                  </button>
-                </div>
-                {recentActivity.map((item, i) => (
-                  <div key={i} style={{
-                    display: 'flex', gap: 10, padding: '6px 0',
-                    borderBottom: i < recentActivity.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none',
-                  }}>
-                    <div style={{
-                      width: 6, height: 6, borderRadius: '50%', marginTop: 5, flexShrink: 0,
-                      background: item.type === 'assessment' ? 'var(--cyan)'
-                        : item.type === 'register' ? 'var(--emerald)'
-                        : item.type === 'review' ? 'var(--blue)'
-                        : 'var(--violet)',
-                    }} />
-                    <div>
-                      <div style={{ fontSize: 11, color: 'var(--text-primary)' }}>
-                        <span style={{ fontWeight: 600 }}>{item.user}</span> {item.action}
-                      </div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{item.time}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Quick Admin Actions */}
-              <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div className="section-title" style={{ marginBottom: 0 }}>Admin Tools</div>
-                {[
-                  { label: 'User Management', icon: Users, path: '/user-management' },
-                  { label: 'System Analytics', icon: BarChart2, path: '/system-analytics' },
-                  { label: 'Audit Logs', icon: Shield, path: '/audit-logs' },
-                  { label: 'Platform Settings', icon: Settings, path: '/platform-settings' },
-                ].map(action => (
-                  <button
-                    key={action.label}
-                    className="agent-card"
-                    style={{ cursor: 'pointer', background: 'none', width: '100%', textAlign: 'left' }}
-                    onClick={() => navigate(action.path)}
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {flaggedPosts.map((post) => (
+                  <div
+                    key={post.id}
+                    style={{
+                      display: "flex", flexDirection: "column", gap: 8, padding: 14,
+                      borderRadius: 10, background: "rgba(244, 63, 94, 0.05)",
+                      border: "1px solid rgba(244, 63, 94, 0.2)",
+                    }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <action.icon style={{ width: 13, height: 13, color: 'var(--violet)' }} />
-                      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)' }}>{action.label}</span>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{post.title}</div>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "IBM Plex Mono", marginTop: 2 }}>
+                          Author: <strong>{post.author_name}</strong> ({post.author_email}) · Posted {new Date(post.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                        <button
+                          className="btn btn-secondary btn-xs"
+                          onClick={() => handleApprovePost(post.id)}
+                          style={{ color: "var(--emerald)", borderColor: "var(--emerald)" }}
+                        >
+                          <Check style={{ width: 12, height: 12 }} /> Approve (Unflag)
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-xs"
+                          onClick={() => handleRemovePost(post.id)}
+                          style={{ color: "var(--rose)", borderColor: "var(--rose)" }}
+                        >
+                          <Trash2 style={{ width: 12, height: 12 }} /> Remove Post
+                        </button>
+                      </div>
                     </div>
-                    <ChevronRight style={{ width: 12, height: 12, color: 'var(--text-muted)' }} />
-                  </button>
+                    <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.6, background: "var(--bg-elevated)", padding: 10, borderRadius: 6, border: "1px solid var(--bg-border)" }}>
+                      {post.content}
+                    </div>
+                  </div>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* =========================================================================
+              SECTION 4: MACHINE LEARNING MODEL STATUS PANEL
+             ========================================================================= */}
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Cpu style={{ width: 16, height: 16, color: "var(--violet)" }} />
+              <div className="section-title" style={{ marginBottom: 0 }}>Core AI Models & Pipeline Evaluation Status</div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+              {MODEL_CONFIGS.map((model) => (
+                <div
+                  key={model.id}
+                  className="card card-sm"
+                  style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 12, borderTop: `3px solid ${model.color}` }}
+                >
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                      <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "IBM Plex Mono", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                        {model.category}
+                      </span>
+                      <span className={`badge ${model.badgeClass}`}>{model.status}</span>
+                    </div>
+
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 6 }}>
+                      {model.name}
+                    </div>
+
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                      {model.description}
+                    </div>
+                  </div>
+
+                  <div style={{ background: "var(--bg-elevated)", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--bg-border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "IBM Plex Mono" }}>
+                      {model.metricLabel}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: model.color, fontFamily: "IBM Plex Mono" }}>
+                      {model.metricValue}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </>

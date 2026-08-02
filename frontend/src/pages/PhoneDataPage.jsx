@@ -5,6 +5,8 @@ import {
   CheckCircle, AlertTriangle, AlertOctagon, Sparkles, Send, Signal, Info, WifiOff, FileText
 } from "lucide-react";
 import { api } from "../lib/api";
+import GoogleFitPipelineCard from "../components/GoogleFitPipelineCard";
+
 
 // --- CUSTOM SVG LINE CHART COMPONENT ---
 function SVGLineChart({ data, dataKey, color, label }) {
@@ -411,14 +413,31 @@ export default function PhoneDataPage() {
         </form>
       </div>
 
+      {/* Google Fit & Manual Entry Pipeline */}
+      <GoogleFitPipelineCard onSyncSuccess={() => selectedDevice && loadDeviceStaticData(selectedDevice)} />
+
       {/* Main 3-column layout */}
+
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 20, alignItems: "start" }}>
         
         {/* COLUMN 1: LIVE SENSOR GRID */}
         <div style={{ display: "grid", gap: 20 }}>
-          <div className="section-title" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 0 }}>
-            <Signal style={{ width: 16, height: 16, color: "var(--cyan)" }} /> Real-time Sensor Metrics
+          <div className="section-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Signal style={{ width: 16, height: 16, color: "var(--cyan)" }} /> Real-time Sensor Metrics
+            </div>
+            {liveTelemetry?.data_source && (
+              <span className={`badge ${
+                liveTelemetry.data_source === "google_fit" ? "badge-emerald" :
+                liveTelemetry.data_source === "manual" ? "badge-cyan" :
+                liveTelemetry.data_source === "n8n_test" ? "badge-amber" :
+                "badge-muted"
+              }`} style={{ fontSize: 9, textTransform: "capitalize" }}>
+                Source: {liveTelemetry.data_source.replace("_", " ")}
+              </span>
+            )}
           </div>
+
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             {/* Steps & Activity */}

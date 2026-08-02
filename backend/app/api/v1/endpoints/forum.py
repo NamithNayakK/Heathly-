@@ -45,3 +45,29 @@ def create_post(
         author_name=current_user.full_name,
         created_at=post.created_at.isoformat(),
     )
+
+
+@router.post("/posts/{post_id}/flag")
+async def flag_post(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from fastapi import HTTPException
+    from app.services.webhook_service import send_webhook_to_n8n_forum_moderation
+    post = db.query(ForumPost).filter(ForumPost.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    post.is_flagged = True
+    db.commit()
+
+    # Trigger n8n Workflow 3: Forum Moderation Alert
+    await send_webhook_to_n8n_forum_moderation(
+        post_id=post.id,
+        title=post.title,
+        content=post.content,
+        reason="Flagged for Moderation Review"
+    )
+
+    return {"status": "success", "id": post_id, "is_flagged": True}
+

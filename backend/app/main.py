@@ -1,3 +1,4 @@
+# Healthly main application module
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -64,6 +65,29 @@ async def daily_cleanup_and_aggregation_loop():
             logger.error(f"Background daily scheduler error: {e}")
 
 
+async def google_fit_background_sync_loop():
+    """Background scheduler task to periodically sync Google Fit telemetry for connected users every 30 minutes."""
+    logger.info("✓ Background Google Fit telemetry scheduler started (interval: 30 mins)")
+    while True:
+        try:
+            await asyncio.sleep(1800) # 30 minutes
+            from app.db.session import SessionLocal
+            from app.services.google_fit_service import run_scheduled_google_fit_sync
+            
+            db = SessionLocal()
+            try:
+                await run_scheduled_google_fit_sync(db)
+            except Exception as e:
+                logger.error(f"Error in background Google Fit sync job: {e}")
+            finally:
+                db.close()
+        except asyncio.CancelledError:
+            logger.info("Background Google Fit scheduler cancelled.")
+            break
+        except Exception as e:
+            logger.error(f"Background Google Fit scheduler loop error: {e}")
+
+
 @app.on_event("startup")
 async def load_ml_models() -> None:
     """Pre-load trained ML models at startup for faster inference."""
@@ -86,12 +110,76 @@ async def load_ml_models() -> None:
     from app.api.v1.endpoints.wifi_sensor import websocket_heartbeat_monitor
     asyncio.create_task(websocket_heartbeat_monitor())
 
+    # Start background Google Fit sync loop
+    asyncio.create_task(google_fit_background_sync_loop())
+
+
 
 
 from app.api.v1.endpoints.wifi_sensor import router as wifi_router
 import asyncio
+from fastapi import WebSocket, WebSocketDisconnect
+from jose import jwt, JWTError
+from app.models.user import User
+from app.services.consultant_ws import consultant_session_manager
+
+from app.api.v1.endpoints.google_fit import router as google_fit_router
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 app.include_router(wifi_router)
+app.include_router(google_fit_router, prefix="/api/auth/google-fit", tags=["google-fit-root"])
+
+
+def get_websocket_user_from_token(token: str | None, db):
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+        subject = payload.get("sub")
+        if subject:
+            return db.query(User).filter(User.email == subject).first()
+    except JWTError:
+        pass
+    return None
+
+@app.websocket("/ws/consultant/session/{session_id}")
+async def websocket_consultant_session(websocket: WebSocket, session_id: str):
+    """Real-time live emotion telemetry WebSocket feed for consultants and doctors."""
+    from app.db.session import SessionLocal
+    db = SessionLocal()
+    try:
+        token = websocket.query_params.get("token")
+        if not token:
+            auth_header = websocket.headers.get("authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+        
+        user = get_websocket_user_from_token(token, db)
+        if not user or (user.role or "patient") not in ["consultant", "admin"]:
+            logger.warning(f"Rejecting WS connection for session {session_id}: user={user.email if user else 'anonymous'}, role={user.role if user else 'none'}")
+            await websocket.close(code=4003, reason="Forbidden: Only consultants and admins can access live session feeds.")
+            return
+
+        await consultant_session_manager.connect(session_id, websocket)
+        
+        await websocket.send_json({
+            "event": "connected",
+            "session_id": session_id,
+            "status": "connected",
+            "message": f"Subscribed to live session feed for session '{session_id}'"
+        })
+        
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_json({"event": "pong"})
+    except WebSocketDisconnect:
+        consultant_session_manager.disconnect(session_id, websocket)
+    except Exception as e:
+        logger.error(f"Error in consultant WS handler for session {session_id}: {e}")
+        consultant_session_manager.disconnect(session_id, websocket)
+    finally:
+        db.close()
+
 
 

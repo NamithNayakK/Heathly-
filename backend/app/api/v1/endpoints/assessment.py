@@ -80,15 +80,20 @@ async def submit_phq9(
     db.add(assessment)
     db.commit()
 
-    # Trigger risk alert workflow if high-risk
-    if response.high_risk:
-        await send_webhook_to_n8n_risk_alert(
-            user_id=current_user.id,
-            email=current_user.email,
-            full_name=current_user.full_name,
-            phq9_score=response.score,
-            risk_level=response.risk_level,
-        )
+    # Trigger risk alert workflow if needs_human_review=true OR risk_level="High" OR high_risk=true
+    if response.high_risk or response.needs_human_review or response.risk_level == "High":
+        try:
+            await send_webhook_to_n8n_risk_alert(
+                user_id=current_user.id,
+                email=current_user.email,
+                full_name=current_user.full_name,
+                phq9_score=response.score,
+                risk_level=response.risk_level,
+                dominant_emotion=response.dominant_emotion,
+                concern_areas=response.concern_areas,
+            )
+        except Exception as err:
+            print(f"[Assessment API] Webhook notification skipped/failed: {err}")
 
     return response
 

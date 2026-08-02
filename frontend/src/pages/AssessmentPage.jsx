@@ -60,6 +60,7 @@ export default function AssessmentPage() {
     setIsSubmitting(true);
     try {
       const data = await api.submitPHQ9(answers);
+      sessionStorage.setItem("latest_result", JSON.stringify(data));
       localStorage.setItem("latest_result", JSON.stringify(data));
       navigate("/results", { state: { result: data } });
     } catch (e) {
@@ -110,7 +111,7 @@ export default function AssessmentPage() {
       </div>
 
       {/* Question card with AnimatePresence */}
-      <div style={{ position: "relative", minHeight: 400 }}>
+      <div style={{ position: "relative" }}>
         <AnimatePresence mode="wait" custom={dir}>
           <motion.div
             key={current}
@@ -120,7 +121,6 @@ export default function AssessmentPage() {
             animate="center"
             exit="exit"
             transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
-            style={{ position: "absolute", inset: 0 }}
           >
             <div className="bento-card" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
               {/* Question text */}

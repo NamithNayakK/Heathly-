@@ -42,7 +42,7 @@ export default function ConsultantDashboard() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const userName = localStorage.getItem("full_name") || "Doctor";
+  const userName = sessionStorage.getItem("full_name") || localStorage.getItem("full_name") || "Doctor";
 
   useEffect(() => {
     const load = async () => {

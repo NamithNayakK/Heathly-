@@ -8,6 +8,8 @@ class RegisterRequest(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
     password: str = Field(min_length=8, max_length=128)
     role: Optional[str] = Field(default="patient")
+    registration_number: Optional[str] = None
+    registration_body: Optional[str] = None
 
     @field_validator("role")
     @classmethod
@@ -29,6 +31,8 @@ class TokenResponse(BaseModel):
     user_email: EmailStr
     full_name: str
     role: str = "patient"
+    verification_status: Optional[str] = None
+    verification_reason: Optional[str] = None
 
 
 class UserProfileResponse(BaseModel):
@@ -36,3 +40,5 @@ class UserProfileResponse(BaseModel):
     email: EmailStr
     full_name: str
     role: str = "patient"
+    verification_status: Optional[str] = None
+    verification_reason: Optional[str] = None

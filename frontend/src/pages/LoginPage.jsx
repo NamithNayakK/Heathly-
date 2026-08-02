@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { useNavigate, Link } from "react-router-dom";
 import {
   Activity, AlertTriangle, ArrowRight, Eye, EyeOff,
-  Key, Lock, Mail, ShieldCheck, Stethoscope, User, UserCog
+  Key, Lock, Mail, ShieldCheck, Stethoscope, User, UserCog, CheckCircle, XCircle, FileText, Building
 } from "lucide-react";
 import { api } from "../lib/api";
 
@@ -110,8 +110,9 @@ export default function LoginPage() {
   const [selectedRole, setSelectedRole] = useState("patient");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null);
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
-    defaultValues: { email: "", password: "", full_name: "" },
+    defaultValues: { email: "", password: "", full_name: "", registration_number: "", registration_body: "" },
   });
 
   const onSubmit = async (form) => {
@@ -120,12 +121,26 @@ export default function LoginPage() {
       const payload = isRegister
         ? await api.register({ ...form, role: selectedRole })
         : await api.login({ email: form.email, password: form.password });
+      sessionStorage.setItem("token",     payload.access_token);
+      sessionStorage.setItem("user_id",   payload.user_id   || "");
+      sessionStorage.setItem("email",     payload.user_email || payload.email || "");
+      sessionStorage.setItem("full_name", payload.full_name  || "");
+      sessionStorage.setItem("role",      payload.role       || "patient");
+
       localStorage.setItem("token",     payload.access_token);
       localStorage.setItem("user_id",   payload.user_id   || "");
       localStorage.setItem("email",     payload.user_email || payload.email || "");
       localStorage.setItem("full_name", payload.full_name  || "");
       localStorage.setItem("role",      payload.role       || "patient");
-      navigate("/dashboard");
+
+      if (isRegister && selectedRole === "consultant") {
+        setVerificationResult({
+          status: payload.verification_status,
+          reason: payload.verification_reason
+        });
+      } else {
+        navigate("/dashboard");
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -135,7 +150,7 @@ export default function LoginPage() {
 
   const switchMode = () => {
     setIsRegister(v => !v);
-    setError(""); reset(); setSelectedRole("patient");
+    setError(""); reset(); setSelectedRole("patient"); setVerificationResult(null);
   };
 
   return (
@@ -260,41 +275,76 @@ export default function LoginPage() {
           padding: "48px 40px",
           display: "flex", flexDirection: "column", justifyContent: "center", gap: 24,
         }}>
-          {/* Mode header */}
           <AnimatePresence mode="wait">
-            <motion.div
-              key={isRegister ? "reg" : "login"}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <div style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 6 }}>
-                {isRegister ? "Create your account" : "Welcome back"}
-              </div>
-              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                {isRegister ? "Join Healthly to start your first check-in" : "Sign in to continue your wellness journey"}
-              </div>
-            </motion.div>
-          </AnimatePresence>
-
-          {/* Error alert */}
-          <AnimatePresence>
-            {error && (
+            {verificationResult ? (
               <motion.div
-                className="alert alert-warn"
-                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.4 }}
+                key="result"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.5 }}
+                style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}
               >
-                <AlertTriangle size={13} />
-                <span>{error}</span>
+                {verificationResult.status === "approved" ? (
+                  <CheckCircle size={48} style={{ color: "var(--emerald)" }} />
+                ) : (
+                  <XCircle size={48} style={{ color: "var(--rose)" }} />
+                )}
+                
+                <h2 style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: 24, margin: 0, color: "var(--text-primary)" }}>
+                  {verificationResult.status === "approved" 
+                    ? "Verified — you now have consultant access" 
+                    : "Verification failed"}
+                </h2>
+                
+                <p style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.6 }}>
+                  {verificationResult.status === "approved"
+                    ? "Your registration number and name matched the public medical registry successfully. You can now access patient data."
+                    : `Reason: ${verificationResult.reason}. You have been registered, but your consultant access is pending manual admin review.`}
+                </p>
+                
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="btn-cta"
+                  style={{ width: "100%", justifyContent: "center", marginTop: 16 }}
+                >
+                  Continue to Dashboard <ArrowRight size={15} style={{ marginLeft: 8 }} />
+                </button>
               </motion.div>
-            )}
-          </AnimatePresence>
+            ) : (
+              <motion.div
+                key={isRegister ? "reg" : "login"}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                style={{ width: "100%" }}
+              >
+                <div style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: 22, fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 6 }}>
+                  {isRegister ? "Create your account" : "Welcome back"}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  {isRegister ? "Join Healthly to start your first check-in" : "Sign in to continue your wellness journey"}
+                </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit(onSubmit)} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Error alert */}
+                <AnimatePresence>
+                  {error && (
+                    <motion.div
+                      className="alert alert-warn"
+                      initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.4 }}
+                      style={{ marginTop: 24 }}
+                    >
+                      <AlertTriangle size={13} />
+                      <span>{error}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Form */}
+                <form onSubmit={handleSubmit(onSubmit)} style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 24 }}>
 
             <AnimatePresence>
               {isRegister && (
@@ -375,6 +425,43 @@ export default function LoginPage() {
                       </motion.div>
                     </AnimatePresence>
                   </div>
+                  
+                  {/* Consultant Specific Fields */}
+                  <AnimatePresence>
+                    {selectedRole === "consultant" && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.4 }}
+                        style={{ display: "flex", flexDirection: "column", gap: 16, overflow: "hidden", marginTop: 8 }}
+                      >
+                        <div style={{
+                          fontSize: 11, color: "var(--amber)", background: "rgba(245,158,11,0.05)",
+                          padding: "10px 14px", borderRadius: 8, border: "1px solid rgba(245,158,11,0.2)",
+                          lineHeight: 1.5, display: "flex", gap: 8, alignItems: "center"
+                        }}>
+                          <ShieldCheck size={16} />
+                          <span>We use an automated registry lookup to instantly verify your consultant credentials.</span>
+                        </div>
+                        
+                        <FormField
+                          label="Registration Number"
+                          icon={FileText}
+                          placeholder="e.g. KMC10001"
+                          registration={register("registration_number", { required: selectedRole === "consultant" })}
+                          error={errors.registration_number && "Registration number is required"}
+                        />
+                        <FormField
+                          label="Registration Body"
+                          icon={Building}
+                          placeholder="e.g. Karnataka Medical Council"
+                          registration={register("registration_body", { required: selectedRole === "consultant" })}
+                          error={errors.registration_body && "Registration body is required"}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -442,6 +529,9 @@ export default function LoginPage() {
                 : "Don't have an account? Create one →"}
             </button>
           </div>
+          </motion.div>
+          )}
+          </AnimatePresence>
 
           {/* Trust badge */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>

@@ -14,8 +14,16 @@ class Settings(BaseSettings):
     webhook_secret: str = "change_me_webhook_secret"
     n8n_webhook_url: str = "http://localhost:5678"
     redis_url: str = "redis://localhost:6379/0"
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/auth/google-fit/callback"
+    app_url: str = "http://localhost:5173"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=("backend/.env", ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
     @property
     def cors_origins_list(self) -> list[str]:

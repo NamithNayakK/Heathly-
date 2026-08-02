@@ -9,6 +9,8 @@ class SensorReading(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now(), nullable=False)
+    data_source: Mapped[str] = mapped_column(String(50), default="unknown", server_default="unknown", nullable=False)
+
     
     # Activity
     steps: Mapped[int] = mapped_column(Integer, default=0)

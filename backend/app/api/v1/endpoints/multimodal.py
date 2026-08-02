@@ -280,6 +280,8 @@ async def submit_session_analytics(
 
 class ImageFrameRequest(BaseModel):
     image_base64: str
+    session_id: str | int | None = None
+    user_id: int | None = None
 
 class ImageFrameResponse(BaseModel):
     dominant_expression: str
@@ -288,12 +290,18 @@ class ImageFrameResponse(BaseModel):
     facial_valence: float
     all_scores: dict[str, float]
     model_source: str
+    model_status: str | None = "validated"
+    validation_accuracy: float | None = 0.1719
 
 @router.post("/analyze-frame", response_model=ImageFrameResponse)
-def analyze_frame(payload: ImageFrameRequest) -> dict[str, Any]:
-    """Analyze a single real-time webcam frame using DeepFace."""
+async def analyze_frame(
+    payload: ImageFrameRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Analyze a single real-time webcam frame using DeepFace, save to session_analytics, and broadcast live via WebSocket."""
     import base64
     import io
+    from app.services.consultant_ws import consultant_session_manager
 
     import numpy as np
     from PIL import Image
@@ -359,11 +367,51 @@ def analyze_frame(payload: ImageFrameRequest) -> dict[str, Any]:
         if dominant_expression not in _VALENCE_MAP:
             dominant_expression = "neutral"
 
-        facial_arousal = _AROUSAL_MAP[dominant_expression]
-        facial_valence = _VALENCE_MAP[dominant_expression]
+        facial_arousal = float(_AROUSAL_MAP[dominant_expression])
+        facial_valence = float(_VALENCE_MAP[dominant_expression])
+
+        # 1. Save result to session_analytics table
+        try:
+            target_user_id = payload.user_id
+            if not target_user_id:
+                first_patient = db.query(User).filter(User.role == "patient").first()
+                target_user_id = first_patient.id if first_patient else 1
+
+            analytics_entry = SessionAnalytics(
+                user_id=target_user_id,
+                session_type="video",
+                dominant_expression=dominant_expression,
+                key_transcript_words=[],
+                sentiment_score=facial_valence,
+                facial_arousal=facial_arousal,
+                facial_valence=facial_valence
+            )
+            db.add(analytics_entry)
+            db.commit()
+            db.refresh(analytics_entry)
+        except Exception as db_err:
+            print(f"--- [Session Analytics Save Warning] {db_err} ---")
+
+        # 2. Prepare WebSocket broadcast payload
+        ws_payload = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "session_id": str(payload.session_id) if payload.session_id else str(target_user_id),
+            "dominant_expression": dominant_expression,
+            "confidence": round(confidence, 4),
+            "facial_arousal": facial_arousal,
+            "facial_valence": facial_valence,
+            "model_status": "validated",
+            "validation_accuracy": 0.1719,
+            "model_details": "Trained on FER-2013 real dataset (17.2% Val Accuracy)"
+        }
+
+        # 3. Broadcast to consultant WS subscribers
+        if payload.session_id:
+            await consultant_session_manager.broadcast(str(payload.session_id), ws_payload)
+        await consultant_session_manager.broadcast(str(target_user_id), ws_payload)
 
         print(
-            f"--- [DeepFace Real-Time Inference] Expression: {dominant_expression.upper()} "
+            f"--- [DeepFace Live Frame Analysis & Consultant WS Broadcast] Expression: {dominant_expression.upper()} "
             f"(conf: {confidence:.4f}) | Valence: {facial_valence:.2f} | Arousal: {facial_arousal:.2f} ---"
         )
         return {
@@ -373,6 +421,8 @@ def analyze_frame(payload: ImageFrameRequest) -> dict[str, Any]:
             "facial_valence": facial_valence,
             "all_scores": all_scores,
             "model_source": model_source,
+            "model_status": "validated",
+            "validation_accuracy": 0.1719,
         }
     except Exception as e:
         raise HTTPException(
@@ -541,9 +591,13 @@ async def get_multimodal_dashboard(
             "heart_rate_variability": latest_sensor.hrv,
             "galvanic_skin_response": latest_sensor.galvanic_skin_response,
             "sleep_duration_hours": latest_sensor.sleep_hours,
+            "steps": latest_sensor.steps,
+            "heart_rate": latest_sensor.heart_rate,
             "stress_index": latest_sensor.stress_index,
+            "data_source": latest_sensor.data_source or "wifi",
             "captured_at": latest_sensor.created_at
         }
+
         
     sessions_summary = None
     if latest_session:

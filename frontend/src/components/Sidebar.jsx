@@ -1,8 +1,8 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Activity, BarChart2, Bell, Brain, Calendar, ChevronRight, ClipboardList,
-  FileText, Home, Lock, LogOut, MessageSquare, Mic, Radio,
-  Settings, Shield, Sliders, Stethoscope, User, UserCog, Users, Video, Zap
+  Activity, BarChart2, Bell, BookOpen, Brain, Calendar, ChevronRight, ClipboardList,
+  Feather, FileText, Home, Lock, LogOut, MessageSquare, Mic, Radio,
+  Settings, Shield, Sliders, Smartphone, Stethoscope, User, UserCog, Users, Video, Zap
 } from 'lucide-react';
 
 const PATIENT_NAV = [
@@ -10,6 +10,7 @@ const PATIENT_NAV = [
     group: 'Core',
     items: [
       { label: 'Dashboard', path: '/dashboard', icon: Home },
+      { label: 'Mood Log', path: '/mood-log', icon: Feather },
       { label: 'Assessment', path: '/assessment', icon: ClipboardList },
       { label: 'AI Companion', path: '/chat', icon: MessageSquare },
       { label: 'Health Records', path: '/health-report', icon: FileText },
@@ -18,8 +19,7 @@ const PATIENT_NAV = [
   {
     group: 'Intelligence',
     items: [
-      { label: 'Sensor Monitor', path: '/sensor', icon: Activity },
-      { label: 'WiFi Telemetry Console', path: '/phone-data', icon: Radio },
+      { label: 'Smartphone Sensor Data', path: '/phone-data', icon: Smartphone },
       { label: 'Video Analysis', path: '/video', icon: Video },
     ]
   },
@@ -62,22 +62,14 @@ const ADMIN_NAV = [
   {
     group: 'Overview',
     items: [
-      { label: 'Dashboard', path: '/dashboard', icon: Home },
-      { label: 'User Management', path: '/user-management', icon: UserCog },
-    ]
-  },
-  {
-    group: 'Operations',
-    items: [
-      { label: 'System Analytics', path: '/system-analytics', icon: BarChart2 },
-      { label: 'Audit Logs', path: '/audit-logs', icon: Shield },
-      { label: 'Platform Settings', path: '/platform-settings', icon: Settings },
+      { label: 'Admin Control Center', path: '/dashboard', icon: Home },
+      { label: 'User Directory', path: '/user-management', icon: UserCog },
     ]
   },
   {
     group: 'Workspace',
     items: [
-      { label: 'Community', path: '/forum', icon: Users },
+      { label: 'Community Forum', path: '/forum', icon: Users },
     ]
   },
 ];
@@ -91,17 +83,18 @@ const ROLE_CONFIG = {
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const role = localStorage.getItem('role') || 'patient';
+  const role = sessionStorage.getItem('role') || localStorage.getItem('role') || 'patient';
   const config = ROLE_CONFIG[role] || ROLE_CONFIG.patient;
   const NAV = config.nav;
 
   const handleLogout = () => {
+    sessionStorage.clear();
     localStorage.clear();
     navigate('/login');
   };
 
-  const userName = localStorage.getItem('full_name') || 'User';
-  const userEmail = localStorage.getItem('email') || '';
+  const userName = sessionStorage.getItem('full_name') || localStorage.getItem('full_name') || 'User';
+  const userEmail = sessionStorage.getItem('email') || localStorage.getItem('email') || '';
 
   return (
     <aside className="app-sidebar">

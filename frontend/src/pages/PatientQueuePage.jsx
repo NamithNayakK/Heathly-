@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Activity, AlertTriangle, ChevronRight, Search, User, Users
+  AlertTriangle, ChevronRight, Eye, Search, Shield, Users
 } from "lucide-react";
 import { api } from "../lib/api";
 
@@ -10,15 +10,15 @@ export default function PatientQueuePage() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("name");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const load = async () => {
       try {
-        const data = await api.getPatients();
+        const data = await api.getTriageQueue();
         setPatients(data.patients || []);
       } catch (e) {
-        console.error(e);
+        setError(e.message);
       } finally {
         setLoading(false);
       }
@@ -26,42 +26,65 @@ export default function PatientQueuePage() {
     load();
   }, []);
 
-  const filtered = patients
-    .filter(p => p.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || p.email.toLowerCase().includes(searchTerm.toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === "name") return a.full_name.localeCompare(b.full_name);
-      if (sortBy === "risk") {
-        const riskOrder = { 'severe': 0, 'high': 0, 'moderately severe': 1, 'moderate': 2, 'mild': 3, 'minimal': 4, 'none': 5 };
-        const aRisk = Object.entries(riskOrder).find(([k]) => (a.last_assessment?.risk_level || 'none').toLowerCase().includes(k))?.[1] ?? 5;
-        const bRisk = Object.entries(riskOrder).find(([k]) => (b.last_assessment?.risk_level || 'none').toLowerCase().includes(k))?.[1] ?? 5;
-        return aRisk - bRisk;
-      }
-      if (sortBy === "records") return (b.sensor_records || 0) - (a.sensor_records || 0);
-      return 0;
-    });
+  const filtered = patients.filter(p =>
+    (p.full_name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.email || "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const riskBadge = (level) => {
+    if (!level) return <span className="badge badge-muted">No data</span>;
+    const l = level.toLowerCase();
+    if (l.includes("severe")) return <span className="badge badge-rose">{level}</span>;
+    if (l.includes("high")) return <span className="badge badge-rose">{level}</span>;
+    if (l.includes("moderate")) return <span className="badge badge-amber">{level}</span>;
+    return <span className="badge badge-live">{level}</span>;
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Header */}
       <div>
-        <div className="page-title">Patient Queue</div>
-        <div className="page-subtitle">Complete list of all registered patients and their clinical status</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Shield style={{ width: 20, height: 20, color: 'var(--emerald)' }} />
+          <div className="page-title">Triage Queue</div>
+        </div>
+        <div className="page-subtitle">
+          Patients flagged for review — High risk, Severe assessments, or AI-flagged needs_human_review
+        </div>
       </div>
 
+      {error && (
+        <div className="alert alert-warn">
+          <AlertTriangle size={14} /> <span>{error}</span>
+        </div>
+      )}
+
+      {/* Search */}
       <div style={{ display: 'flex', gap: 8 }}>
         <div style={{ position: 'relative', flex: 1 }}>
           <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: 'var(--text-muted)' }} />
-          <input className="input-field" style={{ paddingLeft: 38 }} placeholder="Search patients..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <input
+            className="input-field"
+            style={{ paddingLeft: 38 }}
+            placeholder="Search flagged patients..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
-        <select className="input-field" style={{ width: 160 }} value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-          <option value="name">Sort by Name</option>
-          <option value="risk">Sort by Risk Level</option>
-          <option value="records">Sort by Records</option>
-        </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--bg-border)', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
+          <Users style={{ width: 12, height: 12 }} />
+          {patients.length} flagged
+        </div>
       </div>
 
+      {/* Table */}
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[1, 2, 3, 4, 5].map(i => <div key={i} className="skeleton" style={{ height: 60, borderRadius: 10 }} />)}
+          {[1, 2, 3, 4].map(i => <div key={i} className="skeleton" style={{ height: 56, borderRadius: 10 }} />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card" style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+          {searchTerm ? 'No patients match your search.' : 'No patients currently flagged for review. All clear.'}
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -69,17 +92,17 @@ export default function PatientQueuePage() {
             <thead>
               <tr>
                 <th>Patient</th>
-                <th>Email</th>
                 <th>Risk Level</th>
-                <th>Last Score</th>
-                <th>Sensor Records</th>
-                <th>Joined</th>
+                <th>PHQ-9 Score</th>
+                <th>Last Assessment</th>
+                <th>Review Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(patient => (
                 <tr key={patient.id}>
+                  {/* Patient name + avatar */}
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <div style={{
@@ -90,44 +113,55 @@ export default function PatientQueuePage() {
                       }}>
                         {patient.full_name?.charAt(0)?.toUpperCase()}
                       </div>
-                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12 }}>{patient.full_name}</span>
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12 }}>{patient.full_name}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{patient.email}</div>
+                      </div>
                     </div>
                   </td>
-                  <td style={{ fontSize: 11, fontFamily: 'IBM Plex Mono' }}>{patient.email}</td>
-                  <td>
-                    {patient.last_assessment ? (
-                      <span className={`badge ${
-                        patient.last_assessment.risk_level?.toLowerCase().includes('severe') ? 'badge-rose' :
-                        patient.last_assessment.risk_level?.toLowerCase().includes('moderate') ? 'badge-amber' : 'badge-live'
-                      }`}>{patient.last_assessment.risk_level}</span>
-                    ) : <span className="badge badge-muted">No data</span>}
-                  </td>
+
+                  {/* Risk level badge */}
+                  <td>{riskBadge(patient.latest_risk_level)}</td>
+
+                  {/* PHQ-9 score */}
                   <td style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono' }}>
-                    {patient.last_assessment ? `${patient.last_assessment.score}/27` : '—'}
+                    {patient.latest_score != null ? `${patient.latest_score}/27` : '—'}
                   </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Activity style={{ width: 11, height: 11, color: 'var(--cyan)' }} />
-                      <span style={{ fontSize: 12, fontFamily: 'IBM Plex Mono' }}>{patient.sensor_records}</span>
-                    </div>
-                  </td>
+
+                  {/* Last assessment date */}
                   <td style={{ fontSize: 10, fontFamily: 'IBM Plex Mono', color: 'var(--text-muted)' }}>
-                    {patient.created_at ? new Date(patient.created_at).toLocaleDateString() : '—'}
+                    {patient.last_assessment_date
+                      ? new Date(patient.last_assessment_date).toLocaleDateString()
+                      : '—'}
                   </td>
+
+                  {/* Needs review badge */}
                   <td>
-                    <button className="btn btn-primary btn-xs" onClick={() => navigate(`/patient-sensor-view?patient=${patient.id}`)}>
-                      View Sensors <ChevronRight style={{ width: 10, height: 10 }} />
+                    {patient.needs_review ? (
+                      <span className="badge badge-amber" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <AlertTriangle style={{ width: 10, height: 10 }} />
+                        Needs Review
+                      </span>
+                    ) : (
+                      <span className="badge badge-live">Reviewed</span>
+                    )}
+                  </td>
+
+                  {/* Action button */}
+                  <td>
+                    <button
+                      className="btn btn-primary btn-xs"
+                      onClick={() => navigate(`/patient-detail?patient=${patient.id}`)}
+                    >
+                      <Eye style={{ width: 11, height: 11 }} />
+                      View Detail
+                      <ChevronRight style={{ width: 10, height: 10 }} />
                     </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {filtered.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-              {searchTerm ? 'No patients match your search.' : 'No patients registered yet.'}
-            </div>
-          )}
         </div>
       )}
     </div>

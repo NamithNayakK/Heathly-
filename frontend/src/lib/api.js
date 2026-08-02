@@ -11,7 +11,7 @@ const getApiBaseUrl = () => {
 const API_BASE_URL = getApiBaseUrl();
 
 async function request(path, options = {}) {
-  const token = localStorage.getItem("token");
+  const token = sessionStorage.getItem("token") || localStorage.getItem("token");
   const { headers, ...rest } = options;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
@@ -40,6 +40,11 @@ export const api = {
   getChatHistory: () => request("/chat/history"),
   listForumPosts: () => request("/forum/posts"),
   createForumPost: (payload) => request("/forum/posts", { method: "POST", body: JSON.stringify(payload) }),
+  
+  // Mood Log Endpoints
+  submitMoodLog: (payload) => request("/mood-logs", { method: "POST", body: JSON.stringify(payload) }),
+  getMoodLogs: () => request("/mood-logs"),
+  deleteMoodLog: (id) => request(`/mood-logs/${id}`, { method: "DELETE" }),
   
   // Comprehensive multimodal assessment
   submitHealthReport: (filename, raw_text) => 
@@ -89,6 +94,12 @@ export const api = {
     return `${wsProtocol}//${window.location.host}${API_BASE_URL}/bluetooth/stream`;
   },
 
+  // Forum moderation endpoints
+  flagForumPost: (postId) => request(`/forum/posts/${postId}/flag`, { method: "POST" }),
+  getFlaggedForumPosts: () => request("/admin/forum/flagged"),
+  approveForumPost: (postId) => request(`/admin/forum/${postId}/approve`, { method: "POST" }),
+  deleteForumPost: (postId) => request(`/admin/forum/${postId}`, { method: "DELETE" }),
+
   // Admin endpoints
   getAdminUsers: () => request("/admin/users"),
   updateUserRole: (userId, role) => request(`/admin/users/${userId}/role`, { method: "PUT", body: JSON.stringify({ role }) }),
@@ -97,6 +108,15 @@ export const api = {
   // Consultant / Admin shared endpoints
   getPatients: () => request("/admin/patients"),
   getPatientSensorData: (patientId) => request(`/admin/patients/${patientId}/sensor-data`),
+
+  // Consultant triage dashboard
+  getTriageQueue: () => request("/consultant/queue"),
+  getPatientDetail: (patientId) => request(`/consultant/patient/${patientId}`),
+  markReviewed: (patientId, assessmentId, clinicalNote) =>
+    request(`/consultant/patient/${patientId}/review/${assessmentId}`, {
+      method: "POST",
+      body: JSON.stringify({ clinical_note: clinicalNote || null }),
+    }),
 
   // WiFi Telemetry Ingestion Endpoints
   getWifiUsers: () => request("/../../api/users"),
@@ -113,5 +133,20 @@ export const api = {
       : window.location.host;
     return `${wsProtocol}//${host}/ws/dashboard/${userId}`;
   },
+  getLiveSessionUrl: (sessionId) => {
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? `${window.location.hostname}:8000`
+      : window.location.host;
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
+    return `${wsProtocol}//${host}/ws/consultant/session/${sessionId}?token=${token}`;
+  },
+
+  // Google Fit & Manual Entry Pipeline
+  getGoogleFitStatus: (userId) => request(`/auth/google-fit/status${userId ? `?user_id=${userId}` : ""}`),
+  pullGoogleFitData: (userId) => request(`/auth/google-fit/pull-now${userId ? `?user_id=${userId}` : ""}`, { method: "POST" }),
+  submitManualSensorData: (payload, userId) => request(`/auth/google-fit/manual${userId ? `?user_id=${userId}` : ""}`, { method: "POST", body: JSON.stringify(payload) }),
 };
+
+
 

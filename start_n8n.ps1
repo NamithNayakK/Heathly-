@@ -1,0 +1,15 @@
+$env:N8N_ENCRYPTION_KEY = "healthly_n8n_encryption_key_2026_sec_db_key"
+$env:EXECUTIONS_DATA_PRUNE = "true"
+$env:EXECUTIONS_DATA_MAX_AGE = "168"
+$env:EXECUTIONS_DATA_SAVE_ON_ERROR = "all"
+$env:EXECUTIONS_DATA_SAVE_ON_SUCCESS = "all"
+$env:EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS = "true"
+$env:N8N_PORT = "5678"
+$env:N8N_HOST = "localhost"
+$env:N8N_PROTOCOL = "http"
+$env:WEBHOOK_URL = "http://localhost:5678/"
+$env:N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS = "true"
+$env:N8N_LOG_LEVEL = "info"
+
+Write-Host "Starting n8n with encryption key and data retention settings..."
+n8n start

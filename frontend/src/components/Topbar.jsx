@@ -38,7 +38,7 @@ const ROLE_COLORS = {
 export default function Topbar() {
   const location = useLocation();
   const crumbs = BREADCRUMB_MAP[location.pathname] || ['Platform'];
-  const role = localStorage.getItem('role') || 'patient';
+  const role = sessionStorage.getItem('role') || localStorage.getItem('role') || 'patient';
   const RoleIcon = ROLE_ICONS[role] || User;
   const roleColor = ROLE_COLORS[role] || 'var(--cyan)';
 

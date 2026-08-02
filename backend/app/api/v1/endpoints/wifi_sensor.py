@@ -239,8 +239,13 @@ async def receive_sensor_data(
         )
 
 
-    # 1. Auto-discover or link User by device_id
+    # 1. Auto-discover or link User by device_id or email
     user = db.query(User).filter(User.device_id == payload.user_id).first()
+    if not user:
+        user = db.query(User).filter(User.email.ilike(payload.user_id)).first()
+        if user and not user.device_id:
+            user.device_id = payload.user_id
+            db.commit()
     if not user:
         logger.info(f"Auto-registering user for device_id: {payload.user_id}")
         user = User(
@@ -254,51 +259,93 @@ async def receive_sensor_data(
         db.commit()
         db.refresh(user)
 
-    # 2. Parse and save SensorReading
-    reading = SensorReading(
-        user_id=user.id,
-        steps=payload.activity.steps,
-        distance_meters=payload.activity.distance_meters,
-        calories=payload.activity.calories,
-        active_minutes=payload.activity.active_minutes,
-        
-        is_screen_on=payload.screen.is_screen_on,
-        screen_time_minutes=payload.screen.screen_time_today_minutes,
-        screen_brightness=payload.screen.brightness_level,
-        unlock_count=payload.screen.unlock_count,
-        
-        heart_rate=payload.heart.heart_rate_bpm,
-        resting_heart_rate=payload.heart.resting_heart_rate,
-        hrv=payload.heart.hrv_ms,
-        
-        sleep_hours=payload.sleep.last_sleep_duration_hours,
-        sleep_quality=payload.sleep.last_sleep_quality_percent,
-        bedtime=payload.sleep.bedtime,
-        wake_time=payload.sleep.wake_time,
-        
-        battery_level=payload.battery.level_percent,
-        is_charging=payload.battery.is_charging,
-        battery_temperature=payload.battery.temperature,
-        
-        current_app=payload.app_usage.current_app,
-        social_app_minutes=payload.app_usage.social_app_minutes_today,
-        productivity_app_minutes=payload.app_usage.productivity_app_minutes_today,
-        entertainment_app_minutes=payload.app_usage.entertainment_app_minutes_today,
-        
-        connection_type=payload.network.connection_type,
-        wifi_ssid=payload.network.wifi_ssid,
-        
-        notification_count=payload.notifications.count_last_hour,
-        social_notifications_count=payload.notifications.social_notifications_count,
-        
-        unique_locations=payload.location.unique_locations_today or 0,
-        is_at_home=payload.location.is_at_home or False,
-        
-        raw_json=payload.model_dump_json()
-    )
-    db.add(reading)
-    db.commit()
-    db.refresh(reading)
+    # 2. Check for recent reading within 10s to deduplicate streams
+    ten_seconds_ago = datetime.utcnow() - timedelta(seconds=10)
+    reading = db.query(SensorReading).filter(
+        SensorReading.user_id == user.id,
+        SensorReading.created_at >= ten_seconds_ago
+    ).order_by(SensorReading.created_at.desc()).first()
+
+    if reading:
+        # Update existing record (prevent duplicate rows)
+        reading.steps = payload.activity.steps
+        reading.distance_meters = payload.activity.distance_meters
+        reading.calories = payload.activity.calories
+        reading.active_minutes = payload.activity.active_minutes
+        reading.is_screen_on = payload.screen.is_screen_on
+        reading.screen_time_minutes = payload.screen.screen_time_today_minutes
+        reading.screen_brightness = payload.screen.brightness_level
+        reading.unlock_count = payload.screen.unlock_count
+        reading.heart_rate = payload.heart.heart_rate_bpm
+        reading.resting_heart_rate = payload.heart.resting_heart_rate
+        reading.hrv = payload.heart.hrv_ms
+        reading.sleep_hours = payload.sleep.last_sleep_duration_hours
+        reading.sleep_quality = payload.sleep.last_sleep_quality_percent
+        reading.bedtime = payload.sleep.bedtime
+        reading.wake_time = payload.sleep.wake_time
+        reading.battery_level = payload.battery.level_percent
+        reading.is_charging = payload.battery.is_charging
+        reading.battery_temperature = payload.battery.temperature
+        reading.current_app = payload.app_usage.current_app
+        reading.social_app_minutes = payload.app_usage.social_app_minutes_today
+        reading.productivity_app_minutes = payload.app_usage.productivity_app_minutes_today
+        reading.entertainment_app_minutes = payload.app_usage.entertainment_app_minutes_today
+        reading.connection_type = payload.network.connection_type
+        reading.wifi_ssid = payload.network.wifi_ssid
+        reading.notification_count = payload.notifications.count_last_hour
+        reading.social_notifications_count = payload.notifications.social_notifications_count
+        reading.unique_locations = payload.location.unique_locations_today or 0
+        reading.is_at_home = payload.location.is_at_home or False
+        reading.data_source = "wifi"
+        reading.raw_json = payload.model_dump_json()
+        db.commit()
+    else:
+        # Save new SensorReading
+        reading = SensorReading(
+            user_id=user.id,
+            data_source="wifi",
+            steps=payload.activity.steps,
+            distance_meters=payload.activity.distance_meters,
+            calories=payload.activity.calories,
+            active_minutes=payload.activity.active_minutes,
+            
+            is_screen_on=payload.screen.is_screen_on,
+            screen_time_minutes=payload.screen.screen_time_today_minutes,
+            screen_brightness=payload.screen.brightness_level,
+            unlock_count=payload.screen.unlock_count,
+            
+            heart_rate=payload.heart.heart_rate_bpm,
+            resting_heart_rate=payload.heart.resting_heart_rate,
+            hrv=payload.heart.hrv_ms,
+            
+            sleep_hours=payload.sleep.last_sleep_duration_hours,
+            sleep_quality=payload.sleep.last_sleep_quality_percent,
+            bedtime=payload.sleep.bedtime,
+            wake_time=payload.sleep.wake_time,
+            
+            battery_level=payload.battery.level_percent,
+            is_charging=payload.battery.is_charging,
+            battery_temperature=payload.battery.temperature,
+            
+            current_app=payload.app_usage.current_app,
+            social_app_minutes=payload.app_usage.social_app_minutes_today,
+            productivity_app_minutes=payload.app_usage.productivity_app_minutes_today,
+            entertainment_app_minutes=payload.app_usage.entertainment_app_minutes_today,
+            
+            connection_type=payload.network.connection_type,
+            wifi_ssid=payload.network.wifi_ssid,
+            
+            notification_count=payload.notifications.count_last_hour,
+            social_notifications_count=payload.notifications.social_notifications_count,
+            
+            unique_locations=payload.location.unique_locations_today or 0,
+            is_at_home=payload.location.is_at_home or False,
+            
+            raw_json=payload.model_dump_json()
+        )
+        db.add(reading)
+        db.commit()
+        db.refresh(reading)
 
     # 3. Retrieve latest PHQ-9 assessment for risk cross-validation
     latest_phq9 = db.query(PHQ9Assessment).filter(PHQ9Assessment.user_id == user.id).order_by(PHQ9Assessment.created_at.desc()).first()
@@ -383,11 +430,19 @@ def list_registered_users(db: Session = Depends(get_db)):
 @router.get("/api/users/{user_id}/latest")
 def get_latest_sensor_reading(user_id: str, db: Session = Depends(get_db)):
     """Gets the latest sensor reading snapshot for a device/user."""
-    user = db.query(User).filter(User.device_id == user_id).first()
+    user = None
+    if user_id.isdigit():
+        user = db.query(User).filter(User.id == int(user_id)).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-    reading = db.query(SensorReading).filter(SensorReading.user_id == user.id).order_by(SensorReading.timestamp.desc()).first()
+        user = db.query(User).filter(User.device_id == user_id).first()
+    if not user:
+        user = db.query(User).filter(User.email.ilike(user_id)).first()
+    
+    if user:
+        reading = db.query(SensorReading).filter(SensorReading.user_id == user.id).order_by(SensorReading.timestamp.desc()).first()
+    else:
+        reading = None
+
     if not reading:
         raise HTTPException(status_code=404, detail="No readings found for this user")
         
@@ -404,7 +459,8 @@ def get_latest_sensor_reading(user_id: str, db: Session = Depends(get_db)):
         "social_app_minutes": reading.social_app_minutes,
         "notification_count": reading.notification_count,
         "current_app": reading.current_app,
-        "wifi_ssid": reading.wifi_ssid
+        "wifi_ssid": reading.wifi_ssid,
+        "data_source": reading.data_source or "wifi"
     }
 
 
@@ -415,11 +471,19 @@ def get_sensor_history(
     db: Session = Depends(get_db)
 ):
     """Gets historical sensor readings for a device/user."""
-    user = db.query(User).filter(User.device_id == user_id).first()
+    user = None
+    if user_id.isdigit():
+        user = db.query(User).filter(User.id == int(user_id)).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-    readings = db.query(SensorReading).filter(SensorReading.user_id == user.id).order_by(SensorReading.timestamp.desc()).limit(limit).all()
+        user = db.query(User).filter(User.device_id == user_id).first()
+    if not user:
+        user = db.query(User).filter(User.email.ilike(user_id)).first()
+
+    if user:
+        readings = db.query(SensorReading).filter(SensorReading.user_id == user.id).order_by(SensorReading.timestamp.desc()).limit(limit).all()
+    else:
+        readings = []
+
     return [{
         "timestamp": r.timestamp.isoformat(),
         "steps": r.steps,
@@ -431,8 +495,10 @@ def get_sensor_history(
         "sleep_quality": r.sleep_quality,
         "social_app_minutes": r.social_app_minutes,
         "notification_count": r.notification_count,
-        "current_app": r.current_app
+        "current_app": r.current_app,
+        "data_source": r.data_source or "wifi"
     } for r in reversed(readings)]
+
 
 
 @router.get("/api/users/{user_id}/risk")

@@ -1,6 +1,6 @@
 
 import { motion } from "framer-motion";
-import { AlertTriangle, Activity, Brain, CheckCircle2, ChevronRight, Cpu, Shield, TrendingUp, Zap } from "lucide-react";
+import { AlertTriangle, Activity, Brain, CheckCircle2, ChevronRight, Cpu, Shield, Sparkles, TrendingUp, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -25,7 +25,7 @@ function useCount(target) {
 export default function ResultsPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const raw = localStorage.getItem("latest_result");
+  const raw = sessionStorage.getItem("latest_result") || localStorage.getItem("latest_result");
   const result = location.state?.result || (raw ? JSON.parse(raw) : null);
 
   const score = result?.score || 0;
@@ -72,36 +72,40 @@ export default function ResultsPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 960, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
         <div>
-          <div className="page-title">Diagnostic Report</div>
-          <div className="page-subtitle">PHQ-9 assessment results · AI-generated clinical insights · {agentVersion || 'Agentic AI v1'}</div>
+          <div className="page-title font-display" style={{ fontSize: 26, fontWeight: 500, color: '#F5F0EB' }}>
+            Personal Pattern & Reflection Insights
+          </div>
+          <div className="page-subtitle" style={{ color: '#94A3B8' }}>
+            Check-in summary · Personal trends & supportive insights without diagnostic labels
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => navigate('/assessment')}>
-            Reassess
+          <button className="btn btn-secondary btn-sm" onClick={() => navigate('/mood-log')} style={{ borderColor: 'rgba(212,165,116,0.3)', color: '#D4A574' }}>
+            Mood Log
           </button>
-          <button className="btn btn-primary btn-sm" onClick={() => navigate('/dashboard')}>
+          <button className="btn btn-primary btn-sm" onClick={() => navigate('/dashboard')} style={{ background: 'linear-gradient(135deg, #D4A574, #A0785A)', color: '#0B1120' }}>
             Dashboard <ChevronRight style={{ width: 13, height: 13 }} />
           </button>
         </div>
       </div>
 
       {needsReview && (
-        <div className="alert alert-warn">
-          <AlertTriangle style={{ width: 14, height: 14 }} />
-          <span>Complex or safety-sensitive signals detected. Clinical review recommended.</span>
+        <div className="alert alert-info" style={{ background: 'rgba(212,165,116,0.12)', borderColor: 'rgba(212,165,116,0.25)', color: '#D4A574' }}>
+          <Sparkles style={{ width: 14, height: 14 }} />
+          <span>Consider sharing your thoughts with a trusted peer or counselor for additional guidance.</span>
         </div>
       )}
 
       {/* Score Banner */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-        className="card" style={{ display: 'flex', alignItems: 'center', gap: 28, padding: 24 }}>
+        className="card" style={{ display: 'flex', alignItems: 'center', gap: 28, padding: 24, borderTop: '2px solid #D4A574' }}>
         {/* Ring */}
         <div style={{ position: 'relative', width: 120, height: 120, flexShrink: 0 }}>
           <svg width="120" height="120" style={{ transform: 'rotate(-90deg)' }}>
             <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
-            <circle cx="60" cy="60" r={R} fill="none" stroke={riskColor} strokeWidth="8"
+            <circle cx="60" cy="60" r={R} fill="none" stroke="#D4A574" strokeWidth="8"
               strokeLinecap="round" strokeDasharray={CIRC} strokeDashoffset={offset}
-              style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)', filter: `drop-shadow(0 0 5px ${riskColor}60)` }} />
+              style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.4,0,0.2,1)', filter: 'drop-shadow(0 0 5px rgba(212,165,116,0.4))' }} />
           </svg>
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'IBM Plex Sans', lineHeight: 1 }}>{animated}</div>
@@ -110,16 +114,16 @@ export default function ResultsPage() {
         </div>
 
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', marginBottom: 6 }}>PHQ-9 SYMPTOM SCORE</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{risk} Risk</div>
+          <div style={{ fontSize: 11, color: '#D4A574', fontFamily: 'IBM Plex Mono', marginBottom: 6 }}>PERSONAL REFLECTION INDEX</div>
+          <div style={{ fontSize: 22, fontWeight: 500, fontFamily: 'Fraunces, serif', color: '#F5F0EB', marginBottom: 8 }}>{risk} Pattern</div>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: 500 }}>
             {emotionSummary}
           </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>DOMINANT SIGNAL</div>
-          <span className={`badge ${risk.toLowerCase().includes('severe') ? 'badge-rose' : risk.toLowerCase().includes('moderate') ? 'badge-amber' : 'badge-live'}`} style={{ fontSize: 12, padding: '4px 12px' }}>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>PRIMARY EMOTIONAL STATE</div>
+          <span className="badge badge-teal" style={{ fontSize: 12, padding: '4px 12px', background: 'rgba(212,165,116,0.15)', color: '#D4A574' }}>
             {dominantEmotion?.toUpperCase()}
             {emotionConf != null && ` · ${emotionConf}%`}
           </span>

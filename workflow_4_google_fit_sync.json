@@ -1,0 +1,107 @@
+{
+  "name": "Workflow 4: Google Fit Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "google-fit-sync",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Google Fit Sync Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "id": "node-webhook-fit-sync",
+      "webhookId": "google-fit-sync"
+    },
+    {
+      "parameters": {
+        "jsCode": "const webhookData = $(\"Google Fit Sync Webhook\").first().json.body || {};\nconst userId = webhookData.user_id || 4;\nconst stepCount = webhookData.step_count !== undefined ? webhookData.step_count : Math.floor(Math.random() * 4000) + 4000;\nconst heartRate = webhookData.heart_rate !== undefined ? webhookData.heart_rate : Math.floor(Math.random() * 25) + 65;\nconst timestamp = new Date().toISOString();\n\nreturn [{\n  json: {\n    user_id: userId,\n    step_count: stepCount,\n    distance_meters: stepCount * 0.75,\n    calories: stepCount * 0.04,\n    heart_rate: heartRate,\n    device_id: 'google_fit_watch_v2',\n    sync_source: 'Google Fit REST API v1',\n    timestamp: timestamp\n  }\n}];"
+      },
+      "name": "Simulate Google Fit Telemetry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ],
+      "id": "node-simulate-fit-data"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO sensor_readings (user_id, timestamp, steps, distance_meters, calories, active_minutes, is_screen_on, screen_time_minutes, screen_brightness, unlock_count, sleep_hours, sleep_quality, battery_level, is_charging, battery_temperature, current_app, social_app_minutes, productivity_app_minutes, entertainment_app_minutes, connection_type, notification_count, social_notifications_count, unique_locations, is_at_home, created_at, heart_rate) VALUES (CAST('{{ $json.user_id }}' AS INTEGER), NOW(), CAST('{{ $json.step_count }}' AS INTEGER), 6337.5, 338.0, 45, false, 120.0, 0.5, 15, 7.5, 'good', 85, false, 32.0, 'healthly', 10, 30, 20, 'wifi', 5, 2, 3, true, NOW(), CAST('{{ $json.heart_rate }}' AS DOUBLE PRECISION);"
+      },
+      "name": "Insert Sensor Reading DB",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        750,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Healthly PostgreSQL DB"
+        }
+      },
+      "id": "node-postgres-fit-insert"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $(\"Simulate Google Fit Telemetry\").first().json;\nreturn [{\n  json: {\n    workflow: 'Workflow 4: Google Fit Sync',\n    status: 'SUCCESS',\n    execution_confirmed: true,\n    user_id: item.user_id,\n    step_count: item.step_count,\n    synced_at: new Date().toISOString(),\n    details: item\n  }\n}];"
+      },
+      "name": "Log Workflow Execution",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        300
+      ],
+      "id": "node-log-fit-execution"
+    }
+  ],
+  "connections": {
+    "Google Fit Sync Webhook": {
+      "main": [
+        [
+          {
+            "node": "Simulate Google Fit Telemetry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulate Google Fit Telemetry": {
+      "main": [
+        [
+          {
+            "node": "Insert Sensor Reading DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Sensor Reading DB": {
+      "main": [
+        [
+          {
+            "node": "Log Workflow Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -18,3 +18,17 @@ class User(Base):
     device_id: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
     device_token_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Consultant verification fields
+    registration_number: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    registration_body: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    verification_status: Mapped[str | None] = mapped_column(String(50), nullable=True) # "approved", "rejected", "pending"
+    verification_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Google Fit Integration fields
+    google_fit_refresh_token: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    google_fit_connected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    google_fit_last_sync: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+

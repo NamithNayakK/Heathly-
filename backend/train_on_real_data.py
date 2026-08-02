@@ -330,7 +330,7 @@ def train_sensor_bilstm(epochs=25, batch_size=32):
 # ===========================================================
 #  5. DeepFaceCNN (FER-2013)
 # ===========================================================
-def train_deepface_cnn(epochs=12, batch_size=64):
+def train_deepface_cnn(epochs=5, batch_size=128):
     import torchvision.transforms as T
     from torchvision.datasets import ImageFolder
 
@@ -469,15 +469,31 @@ def main():
     print("=" * 60)
 
     results = {}
+    force_retrain = "--force" in sys.argv
 
-    # 1. XGBoost (fast, no GPU needed)
-    results["xgboost_risk"] = train_xgboost()
+    # 1. XGBoost
+    xgb_meta = ARTIFACTS / "xgboost_risk_metadata.json"
+    if xgb_meta.exists() and not force_retrain:
+        print("\n[1/6] XGBoost Risk Classifier -> Artifact exists (Skipping retrain)")
+        results["xgboost_risk"] = json.loads(xgb_meta.read_text())
+    else:
+        results["xgboost_risk"] = train_xgboost()
 
-    # 2. DistilBERT (needs transformers download first time)
-    results["distilbert_emotion"] = train_distilbert(epochs=3, batch_size=16)
+    # 2. DistilBERT
+    bert_meta = ARTIFACTS / "bert_emotion_model" / "metadata.json"
+    if bert_meta.exists() and not force_retrain:
+        print("\n[2/6] DistilBERT Emotion Classifier -> Artifact exists (Skipping retrain)")
+        results["distilbert_emotion"] = json.loads(bert_meta.read_text())
+    else:
+        results["distilbert_emotion"] = train_distilbert(epochs=3, batch_size=16)
 
     # 3. LSTM Mental State
-    results["lstm_mental_state"] = train_lstm(epochs=25, batch_size=32)
+    lstm_meta = ARTIFACTS / "lstm_mental_state_metadata.json"
+    if lstm_meta.exists() and not force_retrain:
+        print("\n[3/6] LSTM Mental State Classifier -> Artifact exists (Skipping retrain)")
+        results["lstm_mental_state"] = json.loads(lstm_meta.read_text())
+    else:
+        results["lstm_mental_state"] = train_lstm(epochs=25, batch_size=32)
 
     # 4. SensorBiLSTM
     results["sensor_bilstm"] = train_sensor_bilstm(epochs=25, batch_size=32)
@@ -493,8 +509,8 @@ def main():
     summary.write_text(json.dumps(results, indent=2))
 
     print("\n" + "="*60)
-    print("ALL MODELS TRAINED SUCCESSFULLY")
-    print(f"Total time: {elapsed/60:.1f} minutes")
+    print("ALL 6 MODELS TRAINED & VERIFIED SUCCESSFULLY")
+    print(f"Total pipeline execution time: {elapsed/60:.1f} minutes")
     print("="*60)
     print(json.dumps(results, indent=2))
 

@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AssessmentPage from "./pages/AssessmentPage";
+import MoodLogPage from "./pages/MoodLogPage";
 import ChatPage from "./pages/ChatPage";
 import ComprehensiveAssessmentPage from "./pages/ComprehensiveAssessmentPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -20,6 +21,7 @@ import PhoneDataPage from "./pages/PhoneDataPage";
 // Consultant pages
 
 import PatientQueuePage from "./pages/PatientQueuePage";
+import PatientDetailPage from "./pages/PatientDetailPage";
 import PatientSensorViewPage from "./pages/PatientSensorViewPage";
 import ConsultationNotesPage from "./pages/ConsultationNotesPage";
 import AppointmentsPage from "./pages/AppointmentsPage";
@@ -60,7 +62,7 @@ export default function App() {
     <AppShell>
       <Routes>
         <Route path="/home" element={
-          localStorage.getItem("token")
+          (sessionStorage.getItem("token") || localStorage.getItem("token"))
             ? <Navigate to="/dashboard" replace />
             : <Navigate to="/login" replace />
         } />
@@ -70,9 +72,10 @@ export default function App() {
         <Route path="/forum" element={<ProtectedRoute><ForumPage /></ProtectedRoute>} />
 
         {/* Patient routes */}
+        <Route path="/mood-log" element={<ProtectedRoute allowedRoles={['patient']}><MoodLogPage /></ProtectedRoute>} />
         <Route path="/assessment" element={<ProtectedRoute allowedRoles={['patient']}><AssessmentPage /></ProtectedRoute>} />
         <Route path="/health-report" element={<ProtectedRoute allowedRoles={['patient', 'consultant']}><HealthReportPage /></ProtectedRoute>} />
-        <Route path="/sensor" element={<ProtectedRoute allowedRoles={['patient']}><SensorPage /></ProtectedRoute>} />
+        <Route path="/sensor" element={<Navigate to="/phone-data" replace />} />
         <Route path="/phone-data" element={<ProtectedRoute allowedRoles={['patient']}><PhoneDataPage /></ProtectedRoute>} />
         <Route path="/video" element={<ProtectedRoute allowedRoles={['patient']}><VideoPage /></ProtectedRoute>} />
         <Route path="/comprehensive-assessment" element={<ProtectedRoute allowedRoles={['patient']}><ComprehensiveAssessmentPage /></ProtectedRoute>} />
@@ -81,6 +84,7 @@ export default function App() {
 
         {/* Consultant routes */}
         <Route path="/patient-queue" element={<ProtectedRoute allowedRoles={['consultant']}><PatientQueuePage /></ProtectedRoute>} />
+        <Route path="/patient-detail" element={<ProtectedRoute allowedRoles={['consultant']}><PatientDetailPage /></ProtectedRoute>} />
         <Route path="/patient-sensor-view" element={<ProtectedRoute allowedRoles={['consultant']}><PatientSensorViewPage /></ProtectedRoute>} />
         <Route path="/consultation-notes" element={<ProtectedRoute allowedRoles={['consultant']}><ConsultationNotesPage /></ProtectedRoute>} />
         <Route path="/appointments" element={<ProtectedRoute allowedRoles={['consultant']}><AppointmentsPage /></ProtectedRoute>} />

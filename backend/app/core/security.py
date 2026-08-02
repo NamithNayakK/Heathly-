@@ -73,3 +73,25 @@ def create_access_token(subject: str) -> str:
     expire = datetime.now(timezone.utc) + expires_delta
     to_encode = {"sub": subject, "exp": expire}
     return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
+
+
+def get_token_fernet():
+    from cryptography.fernet import Fernet
+    key_bytes = hashlib.sha256(settings.secret_key.encode("utf-8")).digest()
+    fernet_key = base64.urlsafe_b64encode(key_bytes)
+    return Fernet(fernet_key)
+
+
+def encrypt_token(token: str) -> str:
+    if not token:
+        return ""
+    f = get_token_fernet()
+    return f.encrypt(token.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_token(encrypted_token: str) -> str:
+    if not encrypted_token:
+        return ""
+    f = get_token_fernet()
+    return f.decrypt(encrypted_token.encode("utf-8")).decode("utf-8")
+
