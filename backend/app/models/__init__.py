@@ -8,9 +8,11 @@ from app.models.session_analytics import SessionAnalytics
 from app.models.wifi_sensor import SensorReading, DailyAggregate, RiskHistory
 from app.models.mood_log import MoodLog
 from app.models.practitioner_registry import VerifiedPractitionerRegistry
+from app.models.patient_assignment import PatientAssignment
 
 __all__ = [
     "User", "PHQ9Assessment", "ChatMessage", "ForumPost", "HealthReport",
     "SensorData", "SessionAnalytics", "SensorReading", "DailyAggregate", "RiskHistory",
-    "MoodLog", "VerifiedPractitionerRegistry",
+    "MoodLog", "VerifiedPractitionerRegistry", "PatientAssignment",
 ]
+

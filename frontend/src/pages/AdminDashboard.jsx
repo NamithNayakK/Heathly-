@@ -95,19 +95,35 @@ export default function AdminDashboard() {
   const [selectedRole, setSelectedRole] = useState("");
   const [updatingUser, setUpdatingUser] = useState(false);
 
+  // Patient Assignment State
+  const [pendingAssignments, setPendingAssignments] = useState([]);
+  const [assignedPatients, setAssignedPatients] = useState([]);
+  const [availableConsultants, setAvailableConsultants] = useState([]);
+  const [selectedConsultants, setSelectedConsultants] = useState({});
+  const [assigningPatientId, setAssigningPatientId] = useState(null);
+  const [assignmentTab, setAssignmentTab] = useState("pending");
+  const [assignedSearchTerm, setAssignedSearchTerm] = useState("");
+  const [reassigningPatientId, setReassigningPatientId] = useState(null);
+  const [selectedReassignConsultant, setSelectedReassignConsultant] = useState({});
+
   const userName = sessionStorage.getItem("full_name") || localStorage.getItem("full_name") || "Admin";
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [statsData, usersData, flaggedData] = await Promise.all([
+      const [statsData, usersData, flaggedData, pendingData, assignedData] = await Promise.all([
         api.getAdminStats(),
         api.getAdminUsers(),
         api.getFlaggedForumPosts().catch(() => ({ items: [] })),
+        api.getPendingAssignments().catch(() => ({ pending_patients: [], available_consultants: [] })),
+        api.getAssignedPatients().catch(() => ({ assigned_patients: [] })),
       ]);
       setStats(statsData);
       setUsers(usersData.users || []);
       setFlaggedPosts(flaggedData.items || []);
+      setPendingAssignments(pendingData.pending_patients || []);
+      setAvailableConsultants(pendingData.available_consultants || []);
+      setAssignedPatients(assignedData.assigned_patients || []);
     } catch (e) {
       console.error("Admin dashboard load error:", e);
       showMessage("Error loading admin data: " + e.message, "error");
@@ -124,6 +140,32 @@ export default function AdminDashboard() {
     setActionMessage({ text: msg, type });
     setTimeout(() => setActionMessage(null), 4000);
   };
+
+  const handleAssignPatient = async (patientId, consultantIdOverride = null) => {
+    const consultantId = consultantIdOverride || selectedConsultants[patientId];
+    if (!consultantId) {
+      showMessage("Please select an approved consultant to assign.", "error");
+      return;
+    }
+    setAssigningPatientId(patientId);
+    try {
+      const res = await api.assignPatient(patientId, parseInt(consultantId));
+      showMessage(res.message || "Patient assigned successfully.");
+      const [pendingData, assignedData] = await Promise.all([
+        api.getPendingAssignments(),
+        api.getAssignedPatients(),
+      ]);
+      setPendingAssignments(pendingData.pending_patients || []);
+      setAvailableConsultants(pendingData.available_consultants || []);
+      setAssignedPatients(assignedData.assigned_patients || []);
+      setReassigningPatientId(null);
+    } catch (e) {
+      showMessage("Failed to assign patient: " + e.message, "error");
+    } finally {
+      setAssigningPatientId(null);
+    }
+  };
+
 
   // User Role Update Handler
   const handleSaveRole = async (userId) => {
@@ -209,6 +251,42 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* Pending Assignment Alert Banner */}
+      {pendingAssignments.length > 0 && (
+        <div
+          className="card"
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
+            background: "linear-gradient(135deg, rgba(244, 63, 94, 0.12), rgba(245, 158, 11, 0.08))",
+            border: "1px solid rgba(244, 63, 94, 0.3)", padding: "14px 18px", borderRadius: 12,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ padding: 8, borderRadius: 10, background: "var(--rose-dim)" }}>
+              <AlertTriangle style={{ width: 20, height: 20, color: "var(--rose)" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>
+                {pendingAssignments.length} Patient{pendingAssignments.length > 1 ? "s" : ""} Awaiting Clinical Consultant Assignment
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                New patient registration triggers require manual consultant matching for clinical oversight.
+              </div>
+            </div>
+          </div>
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              setAssignmentTab("pending");
+              const el = document.getElementById("patient-assignments-section");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+            }}
+          >
+            Assign Patients Now <ChevronRight style={{ width: 13, height: 13 }} />
+          </button>
+        </div>
+      )}
+
       {loading && !stats ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {[160, 240, 200].map((h, i) => (
@@ -217,6 +295,239 @@ export default function AdminDashboard() {
         </div>
       ) : (
         <>
+          {/* =========================================================================
+              PATIENT ASSIGNMENT & CLINICAL OVERSIGHT PANEL
+             ========================================================================= */}
+          <div id="patient-assignments-section" className="card" style={{ display: "flex", flexDirection: "column", gap: 16, borderTop: "3px solid var(--rose)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <UserCheck style={{ width: 20, height: 20, color: "var(--rose)" }} />
+                <div>
+                  <div className="section-title" style={{ marginBottom: 0 }}>Patient-Consultant Manual Assignment</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    Assign newly registered patients to approved clinical consultants for dedicated oversight
+                  </div>
+                </div>
+              </div>
+
+              {/* Tab navigation buttons */}
+              <div style={{ display: "flex", gap: 6, background: "var(--bg-elevated)", padding: 4, borderRadius: 8, border: "1px solid var(--bg-border)" }}>
+                <button
+                  className={`btn btn-xs ${assignmentTab === "pending" ? "btn-primary" : "btn-ghost"}`}
+                  onClick={() => setAssignmentTab("pending")}
+                  style={{ display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  Pending Assignments
+                  <span className={`badge ${pendingAssignments.length > 0 ? "badge-rose" : "badge-muted"}`}>
+                    {pendingAssignments.length}
+                  </span>
+                </button>
+                <button
+                  className={`btn btn-xs ${assignmentTab === "assigned" ? "btn-primary" : "btn-ghost"}`}
+                  onClick={() => setAssignmentTab("assigned")}
+                  style={{ display: "flex", alignItems: "center", gap: 6 }}
+                >
+                  Currently Assigned
+                  <span className="badge badge-live">
+                    {assignedPatients.length}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* TAB 1: PENDING ASSIGNMENTS */}
+            {assignmentTab === "pending" && (
+              <div>
+                {pendingAssignments.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "36px 16px", background: "rgba(16, 185, 129, 0.03)", borderRadius: 10, border: "1px dashed rgba(16, 185, 129, 0.2)" }}>
+                    <CheckCircle2 style={{ width: 32, height: 32, color: "var(--emerald)", margin: "0 auto 8px" }} />
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>All Patients Assigned</div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                      There are currently no unassigned patients in the queue. Every registered patient has a designated consultant.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {pendingAssignments.map((p) => (
+                      <div
+                        key={p.patient_id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 16,
+                          padding: "14px 16px",
+                          borderRadius: 10,
+                          background: p.is_urgent ? "rgba(244, 63, 94, 0.08)" : "var(--bg-elevated)",
+                          border: `1px solid ${p.is_urgent ? "rgba(244, 63, 94, 0.3)" : "var(--bg-border)"}`,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        {/* Patient Details */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 240, flex: 1 }}>
+                          <div style={{
+                            width: 36, height: 36, borderRadius: "50%",
+                            background: p.is_urgent ? "linear-gradient(135deg, var(--rose), var(--amber))" : "linear-gradient(135deg, var(--blue), var(--cyan))",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            color: "#fff", fontWeight: 700, fontSize: 13, flexShrink: 0,
+                          }}>
+                            {p.full_name?.charAt(0)?.toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{p.full_name}</span>
+                              {p.is_urgent && (
+                                <span className="badge badge-rose" style={{ animation: "pulse 2s infinite" }}>
+                                  <AlertTriangle style={{ width: 10, height: 10 }} /> URGENT: {p.urgent_reason}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "IBM Plex Mono" }}>
+                              {p.email} · Registered: {p.registered_at ? new Date(p.registered_at).toLocaleString() : "Recently"}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Consultant Selector + Assign Button */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                          <select
+                            className="input-field"
+                            style={{ width: 260, fontSize: 12 }}
+                            value={selectedConsultants[p.patient_id] || ""}
+                            onChange={(e) => setSelectedConsultants({ ...selectedConsultants, [p.patient_id]: e.target.value })}
+                          >
+                            <option value="">-- Select Approved Consultant --</option>
+                            {availableConsultants.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                Dr. {c.full_name} ({c.registration_number})
+                              </option>
+                            ))}
+                          </select>
+
+                          <button
+                            className="btn btn-primary btn-sm"
+                            disabled={!selectedConsultants[p.patient_id] || assigningPatientId === p.patient_id}
+                            onClick={() => handleAssignPatient(p.patient_id)}
+                          >
+                            {assigningPatientId === p.patient_id ? "Assigning..." : "Assign Consultant"}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: CURRENTLY ASSIGNED PATIENTS */}
+            {assignmentTab === "assigned" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {/* Search */}
+                <div style={{ position: "relative", maxWidth: 360 }}>
+                  <Search style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: "var(--text-muted)" }} />
+                  <input
+                    className="input-field"
+                    style={{ paddingLeft: 38 }}
+                    placeholder="Filter by patient or consultant name..."
+                    value={assignedSearchTerm}
+                    onChange={(e) => setAssignedSearchTerm(e.target.value)}
+                  />
+                </div>
+
+                <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Patient</th>
+                        <th>Assigned Consultant</th>
+                        <th>Assigned By</th>
+                        <th>Assignment Date</th>
+                        <th>Consultant Verification</th>
+                        <th>Actions / Reassign</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assignedPatients
+                        .filter((item) => {
+                          const term = assignedSearchTerm.toLowerCase();
+                          return (
+                            item.patient_name?.toLowerCase().includes(term) ||
+                            item.consultant_name?.toLowerCase().includes(term)
+                          );
+                        })
+                        .map((item) => (
+                          <tr
+                            key={item.assignment_id}
+                            style={{
+                              background: item.consultant_unverified_warning ? "rgba(244, 63, 94, 0.05)" : "transparent",
+                            }}
+                          >
+                            <td>
+                              <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>{item.patient_name}</div>
+                              <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "IBM Plex Mono" }}>{item.patient_email}</div>
+                            </td>
+                            <td>
+                              <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: 13 }}>Dr. {item.consultant_name}</div>
+                              <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "IBM Plex Mono" }}>{item.consultant_email}</div>
+                            </td>
+                            <td style={{ fontSize: 11, color: "var(--text-secondary)" }}>{item.assigned_by_name}</td>
+                            <td style={{ fontSize: 10, fontFamily: "IBM Plex Mono", color: "var(--text-muted)" }}>
+                              {item.assigned_at ? new Date(item.assigned_at).toLocaleDateString() : "—"}
+                            </td>
+                            <td>
+                              {item.consultant_unverified_warning ? (
+                                <span className="badge badge-rose" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                  <AlertTriangle style={{ width: 10, height: 10 }} /> Revoked / Unverified
+                                </span>
+                              ) : (
+                                <span className="badge badge-live">Verified Approved</span>
+                              )}
+                            </td>
+                            <td>
+                              {reassigningPatientId === item.patient_id ? (
+                                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                  <select
+                                    className="input-field"
+                                    style={{ width: 180, fontSize: 11, padding: "4px 8px" }}
+                                    value={selectedReassignConsultant[item.patient_id] || ""}
+                                    onChange={(e) => setSelectedReassignConsultant({ ...selectedReassignConsultant, [item.patient_id]: e.target.value })}
+                                  >
+                                    <option value="">Select New Consultant</option>
+                                    {availableConsultants.map((c) => (
+                                      <option key={c.id} value={c.id}>Dr. {c.full_name}</option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    className="btn btn-primary btn-xs"
+                                    onClick={() => handleAssignPatient(item.patient_id, selectedReassignConsultant[item.patient_id])}
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    className="btn btn-ghost btn-xs"
+                                    onClick={() => setReassigningPatientId(null)}
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  className="btn btn-secondary btn-xs"
+                                  onClick={() => setReassigningPatientId(item.patient_id)}
+                                >
+                                  Reassign
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* =========================================================================
               SECTION 1: SYSTEM-WIDE RISK OVERVIEW & ACCESSIBILITY STATS
              ========================================================================= */}

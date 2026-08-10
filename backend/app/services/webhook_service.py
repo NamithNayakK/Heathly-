@@ -35,6 +35,7 @@ async def send_webhook_to_n8n_risk_alert(
     risk_level: str,
     dominant_emotion: str = None,
     concern_areas: list = None,
+    is_unassigned: bool = False,
 ) -> dict:
     """
     Trigger Workflow 1: High-Risk Escalation Alert in n8n.
@@ -48,10 +49,13 @@ async def send_webhook_to_n8n_risk_alert(
         "risk_level": risk_level,
         "dominant_emotion": dominant_emotion or "N/A",
         "concern_areas": concern_areas or [],
+        "is_unassigned": is_unassigned,
+        "urgent_fallback_required": is_unassigned and ("high" in risk_level.lower() or "severe" in risk_level.lower()),
         "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
     }
 
     return await trigger_n8n_workflow("webhook/risk-alert", payload)
+
 
 
 async def send_webhook_to_n8n_daily_digest() -> dict:

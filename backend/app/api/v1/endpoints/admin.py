@@ -11,6 +11,8 @@ from app.models.wifi_sensor import SensorReading, DailyAggregate
 from app.models.health_report import HealthReport
 from app.models.forum_post import ForumPost
 from app.models.user import User
+from app.models.patient_assignment import PatientAssignment
+
 
 router = APIRouter()
 
@@ -219,8 +221,23 @@ def list_patients(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_consultant_or_admin),
 ):
-    """List all patients — accessible by consultants and admins."""
-    patients = db.query(User).filter(User.role == "patient").order_by(User.full_name).all()
+    """List patients — accessible by consultants (their assigned patients only) and admins (all patients)."""
+    user_role = current_user.role or "patient"
+    if user_role == "consultant":
+        patients = (
+            db.query(User)
+            .join(PatientAssignment, User.id == PatientAssignment.patient_id)
+            .filter(
+                User.role == "patient",
+                PatientAssignment.consultant_id == current_user.id,
+                PatientAssignment.status.in_(["assigned", "reassigned"])
+            )
+            .order_by(User.full_name)
+            .all()
+        )
+    else:
+        patients = db.query(User).filter(User.role == "patient").order_by(User.full_name).all()
+
     result = []
     for p in patients:
         last_assessment = (
@@ -251,12 +268,26 @@ def get_patient_sensor_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_consultant_or_admin),
 ):
-    """Get sensor data for a specific patient — for consultant sensor view."""
+    """Get sensor data for a specific patient — enforced access control for consultants."""
+    user_role = current_user.role or "patient"
+    if user_role == "consultant":
+        assignment = (
+            db.query(PatientAssignment)
+            .filter(
+                PatientAssignment.patient_id == patient_id,
+                PatientAssignment.consultant_id == current_user.id,
+                PatientAssignment.status.in_(["assigned", "reassigned"])
+            )
+            .first()
+        )
+        if not assignment:
+            raise HTTPException(status_code=403, detail="Access denied: Patient is not assigned to you")
+
     patient = db.query(User).filter(User.id == patient_id, User.role == "patient").first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    sensors = (
+    records = (
         db.query(SensorReading)
         .filter(SensorReading.user_id == patient_id)
         .order_by(SensorReading.created_at.desc())
@@ -296,3 +327,204 @@ def get_patient_sensor_data(
             "created_at": last_assessment.created_at.isoformat(),
         } if last_assessment else None,
     }
+
+
+# --- PATIENT ASSIGNMENT MANAGEMENT ENDPOINTS ---
+
+class AssignPatientRequest(BaseModel):
+    consultant_id: int
+
+
+@router.get("/assignments/pending")
+def list_pending_assignments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """List all unassigned patients sorted by registration date (oldest first)."""
+    # Ensure all patients have a PatientAssignment record
+    all_patients = db.query(User).filter(User.role == "patient").all()
+    for p in all_patients:
+        pa = db.query(PatientAssignment).filter(PatientAssignment.patient_id == p.id).first()
+        if not pa:
+            pa = PatientAssignment(
+                patient_id=p.id,
+                status="unassigned",
+                created_at=p.created_at or datetime.utcnow()
+            )
+            db.add(pa)
+    db.commit()
+
+    pending = (
+        db.query(PatientAssignment, User)
+        .join(User, PatientAssignment.patient_id == User.id)
+        .filter(PatientAssignment.status == "unassigned")
+        .order_by(PatientAssignment.created_at.asc())
+        .all()
+    )
+
+    available_consultants = (
+        db.query(User)
+        .filter(User.role == "consultant", User.verification_status == "approved")
+        .order_by(User.full_name)
+        .all()
+    )
+
+    pending_list = []
+    for assignment, patient in pending:
+        latest_assessment = (
+            db.query(PHQ9Assessment)
+            .filter(PHQ9Assessment.user_id == patient.id)
+            .order_by(PHQ9Assessment.created_at.desc())
+            .first()
+        )
+        is_urgent = False
+        urgent_reason = None
+        if latest_assessment:
+            q9 = 0
+            if latest_assessment.answers and isinstance(latest_assessment.answers, dict):
+                q9 = int(latest_assessment.answers.get("8", 0) or 0)
+            if latest_assessment.needs_human_review or latest_assessment.risk_level == "High" or q9 > 0:
+                is_urgent = True
+                urgent_reason = f"High Risk / Q9 Flag (Score: {latest_assessment.score})"
+
+        pending_list.append({
+            "assignment_id": assignment.id,
+            "patient_id": patient.id,
+            "full_name": patient.full_name,
+            "email": patient.email,
+            "registered_at": (
+                assignment.created_at.isoformat() if assignment.created_at
+                else patient.created_at.isoformat() if patient.created_at
+                else None
+            ),
+            "status": assignment.status,
+            "is_urgent": is_urgent,
+            "urgent_reason": urgent_reason,
+            "latest_score": latest_assessment.score if latest_assessment else None,
+            "latest_risk_level": latest_assessment.risk_level if latest_assessment else None,
+        })
+
+    return {
+        "pending_patients": pending_list,
+        "pending_count": len(pending_list),
+        "available_consultants": [
+            {
+                "id": c.id,
+                "full_name": c.full_name,
+                "email": c.email,
+                "registration_number": c.registration_number,
+                "verification_status": c.verification_status,
+            }
+            for c in available_consultants
+        ],
+    }
+
+
+@router.get("/assignments/assigned")
+def list_assigned_patients(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """List all currently assigned patients with consultant details and status warnings."""
+    assigned = (
+        db.query(PatientAssignment, User)
+        .join(User, PatientAssignment.patient_id == User.id)
+        .filter(PatientAssignment.status.in_(["assigned", "reassigned"]))
+        .order_by(PatientAssignment.assigned_at.desc())
+        .all()
+    )
+
+    result = []
+    for assignment, patient in assigned:
+        consultant = (
+            db.query(User).filter(User.id == assignment.consultant_id).first()
+            if assignment.consultant_id
+            else None
+        )
+        assigned_by_user = (
+            db.query(User).filter(User.id == assignment.assigned_by).first()
+            if assignment.assigned_by
+            else None
+        )
+
+        consultant_unverified = bool(consultant and consultant.verification_status != "approved")
+
+        result.append({
+            "assignment_id": assignment.id,
+            "patient_id": patient.id,
+            "patient_name": patient.full_name,
+            "patient_email": patient.email,
+            "consultant_id": consultant.id if consultant else None,
+            "consultant_name": consultant.full_name if consultant else "Unassigned",
+            "consultant_email": consultant.email if consultant else None,
+            "consultant_verification_status": consultant.verification_status if consultant else None,
+            "consultant_unverified_warning": consultant_unverified,
+            "assigned_by_id": assigned_by_user.id if assigned_by_user else None,
+            "assigned_by_name": assigned_by_user.full_name if assigned_by_user else "Admin",
+            "assigned_at": assignment.assigned_at.isoformat() if assignment.assigned_at else None,
+            "status": assignment.status,
+        })
+
+    return {"assigned_patients": result}
+
+
+@router.post("/assignments/{patient_id}/assign")
+def assign_patient_to_consultant(
+    patient_id: int,
+    payload: AssignPatientRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Manually assign or reassign a patient to an approved consultant."""
+    patient = db.query(User).filter(User.id == patient_id, User.role == "patient").first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    consultant = db.query(User).filter(User.id == payload.consultant_id, User.role == "consultant").first()
+    if not consultant:
+        raise HTTPException(status_code=404, detail="Consultant not found")
+
+    if consultant.verification_status != "approved":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot assign patient to unverified consultant (Status: {consultant.verification_status}). Only approved consultants can be assigned."
+        )
+
+    assignment = db.query(PatientAssignment).filter(PatientAssignment.patient_id == patient_id).first()
+    prev_status = assignment.status if assignment else "unassigned"
+    new_status = "reassigned" if prev_status in ("assigned", "reassigned") else "assigned"
+
+    if not assignment:
+        assignment = PatientAssignment(
+            patient_id=patient_id,
+            consultant_id=consultant.id,
+            assigned_by=current_user.id,
+            assigned_at=datetime.utcnow(),
+            status=new_status,
+            created_at=patient.created_at or datetime.utcnow(),
+        )
+        db.add(assignment)
+    else:
+        assignment.consultant_id = consultant.id
+        assignment.assigned_by = current_user.id
+        assignment.assigned_at = datetime.utcnow()
+        assignment.status = new_status
+
+    db.commit()
+    db.refresh(assignment)
+
+    return {
+        "success": True,
+        "message": f"Patient '{patient.full_name}' successfully assigned to Dr. {consultant.full_name}",
+        "assignment": {
+            "id": assignment.id,
+            "patient_id": patient.id,
+            "patient_name": patient.full_name,
+            "consultant_id": consultant.id,
+            "consultant_name": consultant.full_name,
+            "assigned_by": current_user.full_name,
+            "assigned_at": assignment.assigned_at.isoformat(),
+            "status": assignment.status,
+        }
+    }
+

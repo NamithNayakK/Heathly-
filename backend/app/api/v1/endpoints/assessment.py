@@ -83,6 +83,10 @@ async def submit_phq9(
     # Trigger risk alert workflow if needs_human_review=true OR risk_level="High" OR high_risk=true
     if response.high_risk or response.needs_human_review or response.risk_level == "High":
         try:
+            from app.models.patient_assignment import PatientAssignment
+            assignment = db.query(PatientAssignment).filter(PatientAssignment.patient_id == current_user.id).first()
+            is_unassigned = not assignment or assignment.status == "unassigned" or assignment.consultant_id is None
+
             await send_webhook_to_n8n_risk_alert(
                 user_id=current_user.id,
                 email=current_user.email,
@@ -91,9 +95,11 @@ async def submit_phq9(
                 risk_level=response.risk_level,
                 dominant_emotion=response.dominant_emotion,
                 concern_areas=response.concern_areas,
+                is_unassigned=is_unassigned,
             )
         except Exception as err:
             print(f"[Assessment API] Webhook notification skipped/failed: {err}")
+
 
     return response
 

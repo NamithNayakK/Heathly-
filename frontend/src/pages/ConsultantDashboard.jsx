@@ -207,9 +207,19 @@ export default function ConsultantDashboard() {
               ))}
             </div>
           ) : (
-            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-              {searchTerm ? 'No patients match your search.' : 'No patients registered yet.'}
+            <div style={{ textAlign: 'center', padding: '28px 16px', color: 'var(--text-muted)', fontSize: 13 }}>
+              {searchTerm ? (
+                'No patients match your search.'
+              ) : (
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>No Assigned Patients</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    Patients are manually assigned by the administrator. Once an admin assigns patients to you, they will appear here.
+                  </div>
+                </div>
+              )}
             </div>
+
           )}
         </div>
 

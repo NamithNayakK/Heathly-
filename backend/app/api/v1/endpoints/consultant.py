@@ -12,8 +12,10 @@ from app.models.health_report import HealthReport
 from app.models.phq9_assessment import PHQ9Assessment
 from app.models.user import User
 from app.models.wifi_sensor import RiskHistory
+from app.models.patient_assignment import PatientAssignment
 
 router = APIRouter()
+
 
 
 def require_consultant(current_user: User = Depends(get_current_user)) -> User:
@@ -81,44 +83,49 @@ def get_triage_queue(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_consultant),
 ):
-    """Return patients who have High-risk assessments or needs_human_review=true.
-    Sorted: needs_review + high risk first."""
+    """Return patients assigned to this consultant who have assessments or need review.
+    Also includes unassigned high-risk/urgent patients as a global safety fallback."""
 
-    # Subquery: user_ids from phq9_assessments where risk_level contains 'high'/'severe'
-    # or needs_human_review is true
-    flagged_assessment_ids = (
-        db.query(PHQ9Assessment.user_id)
+    # 1. Patients specifically assigned to this consultant
+    assigned_ids = [
+        pa.patient_id for pa in db.query(PatientAssignment)
         .filter(
-            or_(
-                PHQ9Assessment.risk_level.ilike("%high%"),
-                PHQ9Assessment.risk_level.ilike("%severe%"),
-                PHQ9Assessment.needs_human_review == True,
+            PatientAssignment.consultant_id == current_user.id,
+            PatientAssignment.status.in_(["assigned", "reassigned"])
+        ).all()
+    ]
+
+    # 2. Safety fallback: Unassigned patients with High/Severe risk or needs_human_review=true
+    unassigned_patient_ids = [
+        pa.patient_id for pa in db.query(PatientAssignment)
+        .filter(PatientAssignment.status == "unassigned")
+        .all()
+    ]
+    
+    urgent_unassigned_ids = set()
+    if unassigned_patient_ids:
+        urgent_assessments = (
+            db.query(PHQ9Assessment.user_id)
+            .filter(
+                PHQ9Assessment.user_id.in_(unassigned_patient_ids),
+                or_(
+                    PHQ9Assessment.risk_level.ilike("%high%"),
+                    PHQ9Assessment.risk_level.ilike("%severe%"),
+                    PHQ9Assessment.needs_human_review == True,
+                )
             )
+            .all()
         )
-        .distinct()
-        .all()
-    )
+        urgent_unassigned_ids = {u for (u,) in urgent_assessments}
 
-    # Subquery: user_ids from risk_history where risk_level is High
-    flagged_risk_ids = (
-        db.query(RiskHistory.user_id)
-        .filter(RiskHistory.risk_level.ilike("%high%"))
-        .distinct()
-        .all()
-    )
+    allowed_ids = set(assigned_ids) | urgent_unassigned_ids
 
-    flagged_ids = set()
-    for (uid,) in flagged_assessment_ids:
-        flagged_ids.add(uid)
-    for (uid,) in flagged_risk_ids:
-        flagged_ids.add(uid)
-
-    if not flagged_ids:
+    if not allowed_ids:
         return {"patients": []}
 
     patients = (
         db.query(User)
-        .filter(User.id.in_(flagged_ids), User.role == "patient")
+        .filter(User.id.in_(allowed_ids), User.role == "patient")
         .all()
     )
 
@@ -130,6 +137,8 @@ def get_triage_queue(
             .order_by(desc(PHQ9Assessment.created_at))
             .first()
         )
+        is_unassigned_fallback = p.id in urgent_unassigned_ids and p.id not in assigned_ids
+
         result.append({
             "id": p.id,
             "full_name": p.full_name,
@@ -139,6 +148,7 @@ def get_triage_queue(
             "needs_review": bool(latest.needs_human_review) if latest else False,
             "last_assessment_date": latest.created_at.isoformat() if latest else None,
             "dominant_emotion": latest.dominant_emotion if latest else None,
+            "is_unassigned_fallback": is_unassigned_fallback,
         })
 
     # Sort: needs_review=true first, then by risk severity
@@ -163,10 +173,32 @@ def get_patient_detail(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_consultant),
 ):
-    """Full clinical detail for a single patient — assessments, risk history, health reports."""
+    """Full clinical detail for a single patient — strictly enforced assignment access control."""
     patient = db.query(User).filter(User.id == patient_id, User.role == "patient").first()
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
+
+    # Access control: verify patient is assigned to current consultant (or is an unassigned high-risk fallback)
+    assignment = db.query(PatientAssignment).filter(PatientAssignment.patient_id == patient_id).first()
+    is_assigned = assignment and assignment.consultant_id == current_user.id and assignment.status in ["assigned", "reassigned"]
+
+    if not is_assigned:
+        # Check fallback for unassigned urgent case
+        is_urgent_unassigned = False
+        if assignment and assignment.status == "unassigned":
+            urgent_check = db.query(PHQ9Assessment).filter(
+                PHQ9Assessment.user_id == patient_id,
+                or_(
+                    PHQ9Assessment.risk_level.ilike("%high%"),
+                    PHQ9Assessment.risk_level.ilike("%severe%"),
+                    PHQ9Assessment.needs_human_review == True,
+                )
+            ).first()
+            if urgent_check:
+                is_urgent_unassigned = True
+
+        if not is_urgent_unassigned:
+            raise HTTPException(status_code=403, detail="Access denied: Patient is not assigned to you")
 
     # All PHQ-9 assessments (for line chart)
     assessments = (
@@ -273,6 +305,27 @@ def mark_reviewed(
     current_user: User = Depends(require_consultant),
 ):
     """Mark a PHQ-9 assessment as reviewed and optionally save a clinical note."""
+    # Access control verification
+    assignment = db.query(PatientAssignment).filter(PatientAssignment.patient_id == patient_id).first()
+    is_assigned = assignment and assignment.consultant_id == current_user.id and assignment.status in ["assigned", "reassigned"]
+
+    if not is_assigned:
+        is_urgent_unassigned = False
+        if assignment and assignment.status == "unassigned":
+            urgent_check = db.query(PHQ9Assessment).filter(
+                PHQ9Assessment.user_id == patient_id,
+                or_(
+                    PHQ9Assessment.risk_level.ilike("%high%"),
+                    PHQ9Assessment.risk_level.ilike("%severe%"),
+                    PHQ9Assessment.needs_human_review == True,
+                )
+            ).first()
+            if urgent_check:
+                is_urgent_unassigned = True
+
+        if not is_urgent_unassigned:
+            raise HTTPException(status_code=403, detail="Access denied: Patient is not assigned to you")
+
     assessment = (
         db.query(PHQ9Assessment)
         .filter(
@@ -299,3 +352,4 @@ def mark_reviewed(
         "clinical_note": assessment.clinical_note,
         "reviewed_at": assessment.reviewed_at.isoformat() if assessment.reviewed_at else None,
     }
+

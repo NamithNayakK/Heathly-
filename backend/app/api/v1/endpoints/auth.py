@@ -6,6 +6,7 @@ from app.core.security import create_access_token, get_password_hash, verify_pas
 from app.db.session import get_db
 from app.models.user import User
 from app.models.practitioner_registry import VerifiedPractitionerRegistry
+from app.models.patient_assignment import PatientAssignment
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserProfileResponse
 from datetime import datetime
 import re
@@ -64,6 +65,22 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> TokenRe
         )
         
     db.add(user)
+    db.flush()
+
+    # Automatically create patient_assignments row for new patients
+    if (user.role or "patient") == "patient":
+        assignment = db.query(PatientAssignment).filter(PatientAssignment.patient_id == user.id).first()
+        if not assignment:
+            assignment = PatientAssignment(
+                patient_id=user.id,
+                consultant_id=None,
+                assigned_by=None,
+                assigned_at=None,
+                status="unassigned",
+                created_at=datetime.utcnow(),
+            )
+            db.add(assignment)
+
     db.commit()
     db.refresh(user)
 

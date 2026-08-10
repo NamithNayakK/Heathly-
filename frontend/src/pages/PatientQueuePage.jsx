@@ -114,9 +114,17 @@ export default function PatientQueuePage() {
                         {patient.full_name?.charAt(0)?.toUpperCase()}
                       </div>
                       <div>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12 }}>{patient.full_name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12 }}>{patient.full_name}</span>
+                          {patient.is_unassigned_fallback && (
+                            <span className="badge badge-rose" style={{ fontSize: 9 }} title="Unassigned patient shown due to High-Risk fallback alert">
+                              🚨 Urgent Unassigned
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{patient.email}</div>
                       </div>
+
                     </div>
                   </td>
 

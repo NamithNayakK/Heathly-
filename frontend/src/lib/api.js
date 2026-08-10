@@ -104,6 +104,13 @@ export const api = {
   getAdminUsers: () => request("/admin/users"),
   updateUserRole: (userId, role) => request(`/admin/users/${userId}/role`, { method: "PUT", body: JSON.stringify({ role }) }),
   getAdminStats: () => request("/admin/stats"),
+  getPendingAssignments: () => request("/admin/assignments/pending"),
+  getAssignedPatients: () => request("/admin/assignments/assigned"),
+  assignPatient: (patientId, consultantId) =>
+    request(`/admin/assignments/${patientId}/assign`, {
+      method: "POST",
+      body: JSON.stringify({ consultant_id: consultantId }),
+    }),
 
   // Consultant / Admin shared endpoints
   getPatients: () => request("/admin/patients"),
