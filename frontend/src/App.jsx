@@ -16,7 +16,7 @@ import ResultsPage from "./pages/ResultsPage";
 import SensorPage from "./pages/SensorPage";
 import VideoPage from "./pages/VideoPage";
 import PhoneDataPage from "./pages/PhoneDataPage";
-
+import CallPage from "./pages/CallPage";
 
 // Consultant pages
 
@@ -81,6 +81,7 @@ export default function App() {
         <Route path="/comprehensive-assessment" element={<ProtectedRoute allowedRoles={['patient']}><ComprehensiveAssessmentPage /></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute allowedRoles={['patient']}><ChatPage /></ProtectedRoute>} />
         <Route path="/results" element={<ProtectedRoute allowedRoles={['patient', 'consultant']}><ResultsPage /></ProtectedRoute>} />
+        <Route path="/call/:roomId" element={<ProtectedRoute allowedRoles={['patient', 'consultant']}><CallPage /></ProtectedRoute>} />
 
         {/* Consultant routes */}
         <Route path="/patient-queue" element={<ProtectedRoute allowedRoles={['consultant']}><PatientQueuePage /></ProtectedRoute>} />

@@ -1,119 +1,139 @@
-import asyncio
+"""
+WiFi-based wearable/phone sensor bridge.
+
+This replaces the old Bluetooth-LE mock service. Instead of scanning for
+BLE wearables, the companion Android app (SensorApp) reads Activity +
+Body Measurement records from Health Connect and pushes them to this
+backend over the local WiFi network using a short-lived pairing code.
+
+Kept intentionally simple and in-memory (single active pairing at a
+time) to match how the original mock service behaved - no new DB
+migrations required.
+"""
+
 import logging
 import random
+import secrets
+import socket
+import string
 import time
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-MOCK_DEVICES = [
-    {
-        "name": "Healthly Smart Band Pro",
-        "address": "AA:BB:CC:DD:EE:01",
-        "device_type": "Smartband",
-        "brand": "Healthly",
-        "rssi": -58,
-        "is_mock": True
-    },
-    {
-        "name": "Oura Ring Gen3 (Simulated)",
-        "address": "AA:BB:CC:DD:EE:02",
-        "device_type": "Smart Ring",
-        "brand": "Oura",
-        "rssi": -65,
-        "is_mock": True
-    },
-    {
-        "name": "Apple Watch Series 9 (Simulated)",
-        "address": "AA:BB:CC:DD:EE:03",
-        "device_type": "Smartwatch",
-        "brand": "Apple",
-        "rssi": -72,
-        "is_mock": True
-    }
-]
+# Kept for backward-compat with any code that still imports MOCK_DEVICES.
+MOCK_DEVICES = []
 
-class BluetoothService:
-    """BLE / Simulated telemetry service for real-time sensor streaming."""
+PAIRING_CODE_TTL_SECONDS = 15 * 60  # pairing code expires if never used
+STALE_AFTER_SECONDS = 45  # if no data pushed in this long, mark offline
 
-    def __init__(self):
-        self.connected_device: Optional[Dict[str, Any]] = None
-        self.connected_user_id: Optional[int] = None
-        self.is_connected: bool = False
-        self.battery_level: int = 92
 
-    async def scan_devices(self) -> List[Dict[str, Any]]:
-        """Return available mock BLE devices."""
-        await asyncio.sleep(0.5)
-        return MOCK_DEVICES
+def _get_lan_ip() -> str:
+    """Best-effort discovery of this machine's LAN IP address (the address
+    the phone, on the same WiFi network, should target)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+        finally:
+            s.close()
+    except Exception:
+        return "127.0.0.1"
 
-    async def connect_device(self, address: str, user_id: Optional[int] = None) -> Dict[str, Any]:
-        """Connect to real or simulated BLE wearable."""
-        device = next((d for d in MOCK_DEVICES if d["address"] == address), None)
-        if not device:
-            device = {
-                "name": f"BLE Device ({address})",
-                "address": address,
-                "device_type": "Wearable Sensor",
-                "brand": "Generic",
-                "rssi": -60,
-                "is_mock": True
-            }
-        
-        self.connected_device = device
-        self.connected_user_id = user_id
-        self.is_connected = True
-        self.battery_level = random.randint(75, 100)
-        logger.info(f"Connected to BLE device: {device['name']}")
+
+def _generate_pairing_code() -> str:
+    return "".join(random.choices(string.digits, k=6))
+
+
+class WifiSensorService:
+    """Holds the single active phone<->dashboard pairing session."""
+
+    def __init__(self) -> None:
+        self._pairing_code: Optional[str] = None
+        self._pairing_created_at: float = 0.0
+        self._connected: bool = False
+        self._device: Optional[Dict[str, Any]] = None
+        self._last_seen: float = 0.0
+        self._latest_packet: Optional[Dict[str, Any]] = None
+        self._subscribers = []
+
+    # ---- Pairing lifecycle -------------------------------------------------
+
+    def start_pairing(self, server_port: int = 8000) -> Dict[str, Any]:
+        """Generates a fresh pairing code and returns connection info to show
+        on the web dashboard so the user can enter it on their phone."""
+        self._pairing_code = _generate_pairing_code()
+        self._pairing_created_at = time.time()
         return {
-            "status": "success",
-            "message": f"Successfully connected to {device['name']}",
-            "device": device
+            "pairing_code": self._pairing_code,
+            "server_ip": _get_lan_ip(),
+            "server_port": server_port,
+            "expires_in": PAIRING_CODE_TTL_SECONDS,
         }
 
-    async def disconnect_device(self) -> Dict[str, Any]:
-        """Disconnect active BLE device."""
-        prev_name = self.connected_device.get("name") if self.connected_device else "Device"
-        self.connected_device = None
-        self.connected_user_id = None
-        self.is_connected = False
-        logger.info(f"Disconnected BLE device: {prev_name}")
-        return {
-            "status": "success",
-            "message": f"Disconnected from {prev_name}"
+    def verify_pairing_code(self, code: str) -> bool:
+        if not self._pairing_code:
+            return False
+        if time.time() - self._pairing_created_at > PAIRING_CODE_TTL_SECONDS:
+            return False
+        return secrets.compare_digest(code, self._pairing_code)
+
+    def disconnect(self) -> Dict[str, Any]:
+        self._connected = False
+        self._device = None
+        self._pairing_code = None
+        self._latest_packet = None
+        return {"status": "disconnected"}
+
+    # ---- Ingesting data from the phone --------------------------------------
+
+    def ingest(self, device_id: str, activity_index: float, telemetry: Dict[str, Any],
+               ai_analysis: Dict[str, Any], fusion: Dict[str, Any]) -> Dict[str, Any]:
+        self._connected = True
+        self._last_seen = time.time()
+        self._device = {
+            "name": "Android Health Connect",
+            "address": device_id,
+            "device_type": "phone",
+            "brand": "Android",
+            "rssi": -40,
+            "is_mock": False,
         }
+        packet = {
+            "telemetry": telemetry,
+            "ai_analysis": ai_analysis,
+            "fusion_contribution": fusion,
+            "device_status": {
+                "battery_level": None,
+                "connected": True,
+            },
+        }
+        self._latest_packet = packet
+        return packet
+
+    # ---- Status / streaming --------------------------------------------------
 
     def get_status(self) -> Dict[str, Any]:
-        """Return current status dictionary."""
+        # Auto-expire if the phone stopped pushing data.
+        if self._connected and (time.time() - self._last_seen) > STALE_AFTER_SECONDS:
+            self._connected = False
+
         return {
-            "connected": self.is_connected,
-            "device": self.connected_device,
-            "is_mocked": True,
-            "battery_level": self.battery_level if self.is_connected else None,
-            "real_ble_supported": False
+            "connected": self._connected,
+            "device": self._device,
+            "is_mocked": False,
+            "battery_level": None,
+            "real_ble_supported": False,
+            "pairing_code": self._pairing_code if not self._connected else None,
+            "server_ip": _get_lan_ip(),
         }
 
-    async def stream_telemetry_websocket(self) -> AsyncGenerator[Dict[str, Any], None]:
-        """Generate 1Hz telemetry updates with heart rate, HRV, blood oxygen, and stress predictions."""
-        while self.is_connected:
-            hr = round(random.uniform(62.0, 98.0), 1)
-            hrv = round(random.uniform(35.0, 75.0), 1)
-            spo2 = round(random.uniform(96.0, 99.5), 1)
-            temp = round(random.uniform(36.2, 37.1), 1)
-            stress_prob = round(random.uniform(0.12, 0.45), 2)
-            
-            packet = {
-                "timestamp": int(time.time()),
-                "heart_rate": hr,
-                "hrv": hrv,
-                "spo2": spo2,
-                "temperature": temp,
-                "stress_level": "low" if stress_prob < 0.35 else "moderate",
-                "stress_probability": stress_prob,
-                "battery_level": self.battery_level,
-                "device_name": self.connected_device["name"] if self.connected_device else "Sensor"
-            }
-            yield packet
-            await asyncio.sleep(1.0)
+    def get_latest_packet(self) -> Optional[Dict[str, Any]]:
+        return self._latest_packet
 
-bluetooth_service = BluetoothService()
+
+wifi_sensor_service = WifiSensorService()
+
+# Backward-compatible alias for any leftover imports of the old name.
+bluetooth_service = wifi_sensor_service

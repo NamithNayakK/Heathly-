@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
+from app.db.encrypted_type import EncryptedText
 
 
 class ChatMessage(Base):
@@ -11,8 +12,8 @@ class ChatMessage(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
-    user_message: Mapped[str] = mapped_column(Text, nullable=False)
-    bot_response: Mapped[str] = mapped_column(Text, nullable=False)
+    user_message: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    bot_response: Mapped[str] = mapped_column(EncryptedText, nullable=False)
     emotion: Mapped[str] = mapped_column(String(50), nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     escalation_required: Mapped[bool] = mapped_column(Boolean, nullable=False)

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.phq9_assessment import PHQ9Assessment
-from app.models.wifi_sensor import SensorReading, DailyAggregate
+from app.models.wifi_sensor import SensorReading, DailyAggregate, MobileGpsSession, MobileActivitySession
 from app.models.health_report import HealthReport
 from app.models.forum_post import ForumPost
 from app.models.user import User
@@ -290,7 +290,23 @@ def get_patient_sensor_data(
     records = (
         db.query(SensorReading)
         .filter(SensorReading.user_id == patient_id)
-        .order_by(SensorReading.created_at.desc())
+        .order_by(SensorReading.timestamp.desc())
+        .limit(30)
+        .all()
+    )
+
+    gps_sessions = (
+        db.query(MobileGpsSession)
+        .filter(MobileGpsSession.user_id == patient_id)
+        .order_by(MobileGpsSession.start_time.desc())
+        .limit(10)
+        .all()
+    )
+
+    activity_sessions = (
+        db.query(MobileActivitySession)
+        .filter(MobileActivitySession.user_id == patient_id)
+        .order_by(MobileActivitySession.start_time.desc())
         .limit(20)
         .all()
     )
@@ -307,23 +323,60 @@ def get_patient_sensor_data(
             "id": patient.id,
             "full_name": patient.full_name,
             "email": patient.email,
+            "device_id": patient.device_id,
         },
         "sensor_records": [
             {
                 "id": r.id,
-                "heart_rate_variability": r.heart_rate_variability,
+                "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+                "data_source": r.data_source,
+                "device_id": r.device_id,
+                # Native mobile fields
+                "steps": r.steps,
+                "distance_km": round(r.distance_meters / 1000.0, 2) if r.distance_meters else None,
+                "calories": r.calories,
+                "is_estimated_calories": r.is_estimated,
+                "active_minutes": r.active_minutes,
+                "heart_rate": r.heart_rate,
+                "resting_heart_rate": r.resting_heart_rate,
+                "sleep_hours": r.sleep_hours,
+                "screen_time_minutes": r.screen_time_minutes,
+                # Legacy-compatible aliases for PatientSensorViewPage
+                "heart_rate_variability": r.hrv,
                 "galvanic_skin_response": r.galvanic_skin_response,
-                "sleep_duration_hours": r.sleep_duration_hours,
+                "sleep_duration_hours": r.sleep_hours,
                 "stress_index": r.stress_index,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "created_at": r.timestamp.isoformat() if r.timestamp else None,
             }
             for r in records
+        ],
+        "gps_sessions": [
+            {
+                "id": g.id,
+                "start_time": g.start_time.isoformat(),
+                "end_time": g.end_time.isoformat(),
+                "distance_km": round(g.distance_meters / 1000.0, 2),
+                "duration_minutes": round(g.duration_seconds / 60.0, 1),
+                "average_speed_kmh": round((g.average_speed_ms or 0) * 3.6, 1) if g.average_speed_ms else None,
+                "data_source": g.data_source,
+            }
+            for g in gps_sessions
+        ],
+        "activity_sessions": [
+            {
+                "id": a.id,
+                "activity_type": a.activity_type,
+                "start_time": a.start_time.isoformat(),
+                "end_time": a.end_time.isoformat(),
+                "duration_minutes": round(a.duration_seconds / 60.0, 1),
+                "confidence": a.confidence,
+                "data_source": a.data_source,
+            }
+            for a in activity_sessions
         ],
         "last_assessment": {
             "score": last_assessment.score,
             "risk_level": last_assessment.risk_level,
-            "dominant_emotion": last_assessment.dominant_emotion,
-            "mental_state_label": last_assessment.mental_state_label,
             "created_at": last_assessment.created_at.isoformat(),
         } if last_assessment else None,
     }

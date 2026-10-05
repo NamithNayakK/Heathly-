@@ -39,6 +39,9 @@ Thumbs.db
 # Database
 *.db
 *.sqlite3
+*.sql
+backups/
+backend/backups/
 
 # Environment variables & secrets
 .env

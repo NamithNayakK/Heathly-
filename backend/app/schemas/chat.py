@@ -11,6 +11,27 @@ class ChatResponse(BaseModel):
     confidence: float
     escalation_required: bool
     risk_probability: float | None = None
+    # PHQ-9 severity + wellbeing widget
+    risk_level: str | None = None
+    wellness_percentage: int | None = None
+    suggest_doctor: bool = False
+    urgent_doctor: bool = False
+    # Sensor / activity context
+    sensor_connected: bool = False
+    steps_today: int | None = None
+    active_minutes_today: int | None = None
+    activity_suggestion: str | None = None
+
+
+class CompanionStatusResponse(BaseModel):
+    risk_level: str | None = None
+    wellness_percentage: int | None = None
+    suggest_doctor: bool = False
+    urgent_doctor: bool = False
+    sensor_connected: bool = False
+    steps_today: int | None = None
+    active_minutes_today: int | None = None
+    activity_suggestion: str | None = None
 
 
 class ChatHistoryItem(BaseModel):

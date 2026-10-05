@@ -411,39 +411,42 @@ export default function VideoPage() {
       <canvas ref={canvasRef} width="240" height="180" style={{ display: "none" }} />
 
       {/* Page Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <div className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {userRole === "developer" ? "System Model Monitor" : userRole === "doctor" ? "Clinical Telemetry Workspace" : "Video Consultation"}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontFamily: 'Fraunces, serif', fontSize: 'clamp(1.75rem, 3vw, 2.25rem)', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
+              {userRole === "developer" ? "Diagnostic Telemetry Architecture" : userRole === "doctor" ? "Clinical Affect Telemetry" : "Telehealth Consultation"}
+            </span>
             <span style={{ 
-              fontSize: 10, 
-              padding: '2px 8px', 
-              borderRadius: 20, 
+              fontSize: 11, 
+              padding: '3px 10px', 
+              borderRadius: 9999, 
               background: `${getRoleBadge().color}15`, 
               color: getRoleBadge().color,
-              fontFamily: 'IBM Plex Mono',
+              fontFamily: 'IBM Plex Mono, monospace',
               border: `1px solid ${getRoleBadge().color}30`
             }}>
               {getRoleBadge().text}
             </span>
           </div>
-          <div className="page-subtitle">
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
             {userRole === "developer" 
-              ? "Developer hardware performance logging, model latencies, and sensor status telemetry"
+              ? "Hardware capture monitoring, model inference latency metrics, and modality weights"
               : userRole === "doctor"
                 ? "Autonomic biomarkers, emotional valence tracking, and transcription diagnostics"
                 : "Secure clinical-grade telehealth consultation session with real-time audio/video sync"
             }
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span className={`badge ${isSessionActive ? 'badge-live' : 'badge-muted'}`}>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span className={`badge ${isSessionActive ? 'badge-live' : 'badge-muted'}`} style={{ padding: '6px 12px', fontSize: 11 }}>
             <span className={`status-dot ${isSessionActive ? 'live' : 'idle'}`} />
-            Session: {isSessionActive ? "ACTIVE" : "STANDBY"}
+            {isSessionActive ? "FEED ACTIVE" : "STANDBY"}
           </span>
           <button 
             className={`btn ${isSessionActive ? 'btn-secondary' : 'btn-primary'} btn-sm`} 
             onClick={() => setIsSessionActive(!isSessionActive)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             {isSessionActive ? (
               <>
@@ -453,7 +456,7 @@ export default function VideoPage() {
             ) : (
               <>
                 <Play style={{ width: 13, height: 13, fill: 'currentColor' }} />
-                Initialize Session
+                Initialize Feed
               </>
             )}
           </button>
@@ -486,15 +489,18 @@ export default function VideoPage() {
       {/* 👤 VIEW A: PATIENT INTERFACE (Zero Dials / Complete Privacy) */}
       {/* ============================================================== */}
       {userRole === "patient" && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 380px', gap: 20 }}>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
-              <span className="section-title" style={{ marginBottom: 0 }}>Video Stream</span>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden', padding: 20, background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-lg)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Video Stream</span>
+                <span style={{ fontSize: 10, fontFamily: 'IBM Plex Mono', color: 'var(--text-muted)' }}>720p HD · WebRTC Secure</span>
+              </div>
               <div style={{ 
                 width: '100%', 
                 height: 400, 
-                background: '#040712', 
+                background: 'var(--bg-elevated)', 
                 borderRadius: 'var(--radius-md)', 
                 border: '1px solid var(--bg-border)',
                 position: 'relative',
@@ -512,13 +518,13 @@ export default function VideoPage() {
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                   />
                 ) : (
-                  <div style={{ textAlign: 'center', padding: 20, zIndex: 1, color: 'var(--text-muted)' }}>
-                    <Video style={{ width: 48, height: 48, margin: '0 auto 12px', opacity: 0.4 }} />
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                      Camera Stream Inactive
+                  <div style={{ textAlign: 'center', padding: 24, zIndex: 1, color: 'var(--text-muted)' }}>
+                    <Video style={{ width: 44, height: 44, margin: '0 auto 12px', opacity: 0.35, color: 'var(--brand)' }} />
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
+                      Clinical Stream Offline
                     </div>
-                    <div style={{ fontSize: 11, marginTop: 4 }}>
-                      Start the session to establish secure clinical video feed.
+                    <div style={{ fontSize: 12, marginTop: 4, color: 'var(--text-muted)' }}>
+                      Click "Initialize Feed" above to start the consultation.
                     </div>
                   </div>
                 )}
@@ -528,12 +534,12 @@ export default function VideoPage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* Audio Waveform */}
-            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <span className="section-title" style={{ marginBottom: 0 }}>Vocal Feed</span>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 18, background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-lg)' }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Acoustic Audio Channel</span>
               <div style={{
                 height: 60,
-                background: '#040712',
-                borderRadius: 'var(--radius-md)',
+                background: 'var(--bg-elevated)',
+                borderRadius: 'var(--radius-sm)',
                 border: '1px solid var(--bg-border)',
                 position: 'relative',
                 display: 'flex',
@@ -544,20 +550,19 @@ export default function VideoPage() {
                   <path
                     d={getAudioWavePath()}
                     fill="none"
-                    stroke="var(--cyan)"
+                    stroke="var(--teal)"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    style={{ filter: "drop-shadow(0 0 3px rgba(6,182,212,0.5))" }}
                   />
                 </svg>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
-                <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <Volume2 style={{ width: 12, height: 12 }} /> 16kHz Sampling
+                <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'IBM Plex Mono' }}>
+                  <Volume2 style={{ width: 12, height: 12 }} /> 16kHz Audio Context
                 </span>
-                <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
-                  {isSessionActive ? "Active" : "Standby"}
+                <span style={{ color: isSessionActive ? 'var(--emerald)' : 'var(--text-muted)', fontWeight: 600, fontFamily: 'IBM Plex Mono' }}>
+                  {isSessionActive ? "Streaming" : "Standby"}
                 </span>
               </div>
             </div>
@@ -621,7 +626,7 @@ export default function VideoPage() {
               <div style={{ 
                 width: '100%', 
                 height: 200, 
-                background: '#040712', 
+                background: 'var(--bg-elevated)', 
                 borderRadius: 'var(--radius-md)', 
                 border: '1px solid var(--bg-border)',
                 position: 'relative',
@@ -651,7 +656,7 @@ export default function VideoPage() {
               <span className="section-title" style={{ marginBottom: 0 }}>Patient Voice Scope</span>
               <div style={{
                 height: 60,
-                background: '#040712',
+                background: 'var(--bg-elevated)',
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--bg-border)',
                 position: 'relative',
@@ -858,7 +863,7 @@ export default function VideoPage() {
               <div style={{ 
                 width: '100%', 
                 height: 200, 
-                background: '#040712', 
+                background: 'var(--bg-elevated)', 
                 borderRadius: 'var(--radius-md)', 
                 border: '1px solid var(--bg-border)',
                 position: 'relative',
@@ -888,7 +893,7 @@ export default function VideoPage() {
               <span className="section-title" style={{ marginBottom: 0 }}>Vocal Bandwidth Scope</span>
               <div style={{
                 height: 60,
-                background: '#040712',
+                background: 'var(--bg-elevated)',
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--bg-border)',
                 position: 'relative',

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, CheckCircle2, Zap, AlertTriangle } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Zap, AlertTriangle, ShieldCheck, Heart } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
@@ -11,25 +11,24 @@ const QUESTIONS = [
   "Feeling tired or having little energy",
   "Poor appetite or overeating",
   "Feeling bad about yourself — or that you are a failure",
-  "Trouble concentrating on things",
-  "Moving or speaking slowly, or being very restless",
-  "Thoughts that you would be better off dead, or of hurting yourself",
+  "Trouble concentrating on things, such as reading or working",
+  "Moving or speaking noticeably slowly, or being unusually restless",
+  "Thoughts that you would be better off dead, or of hurting yourself in some way",
 ];
 
 const LABELS = [
-  { label: "Not at all",            sub: "0 days in the past 2 weeks" },
-  { label: "Several days",          sub: "1–6 days" },
-  { label: "More than half the days", sub: "7–11 days" },
-  { label: "Nearly every day",      sub: "12–14 days" },
+  { label: "Not at all", sub: "0 days in the past 2 weeks" },
+  { label: "Several days", sub: "1–6 days during this period" },
+  { label: "More than half the days", sub: "7–11 days during this period" },
+  { label: "Nearly every day", sub: "12–14 days during this period" },
 ];
 
-// Calm, non-judgmental — all teal/lavender, no red in the input flow
-const OPTION_COLORS = ["var(--teal)", "var(--teal)", "var(--lav)", "var(--lav)"];
+const OPTION_COLORS = ["#10B981", "#5EEAD4", "#FCD34D", "#A78BFA"];
 
 const slideVariants = {
-  enter: (dir) => ({ opacity: 0, x: dir > 0 ? 40 : -40 }),
-  center: { opacity: 1, x: 0 },
-  exit:  (dir) => ({ opacity: 0, x: dir > 0 ? -40 : 40 }),
+  enter: (dir) => ({ opacity: 0, y: dir > 0 ? 20 : -20 }),
+  center: { opacity: 1, y: 0 },
+  exit:  (dir) => ({ opacity: 0, y: dir > 0 ? -20 : 20 }),
 };
 
 export default function AssessmentPage() {
@@ -70,47 +69,40 @@ export default function AssessmentPage() {
     }
   };
 
+  const isQuestion9Positive = current === 8 && answers[8] !== null && answers[8] > 0;
+
   return (
-    <div style={{ maxWidth: 680, margin: "0 auto", display: "flex", flexDirection: "column", gap: 24 }}>
+    <div style={{ maxWidth: 740, margin: "0 auto", display: "flex", flexDirection: "column", gap: 36, padding: "20px 0 60px" }}>
 
       {/* Header */}
-      <div>
-        <div className="page-title">PHQ-9 Assessment</div>
-        <div className="page-subtitle">One question at a time · DSM-V aligned · Takes ~3 minutes</div>
+      <div style={{ textAlign: "center", borderBottom: "1px solid var(--bg-border)", paddingBottom: 28 }}>
+        <div className="editorial-eyebrow dark" style={{ marginBottom: 12 }}>
+          CLINICAL QUESTIONNAIRE · DSM-V PROTOCOL
+        </div>
+        <h1 className="page-title font-display" style={{ fontSize: "clamp(2rem, 3.2vw, 2.6rem)", fontWeight: 600, color: "#FFFFFF", margin: 0 }}>
+          PHQ-9 Depression Screening
+        </h1>
+        <p style={{ fontSize: 14, color: "var(--text-secondary)", marginTop: 8, maxWidth: 540, margin: "8px auto 0" }}>
+          Reflect calmly on your emotional baseline over the last 2 weeks. One prompt at a time.
+        </p>
       </div>
 
-      {/* Breathing progress line */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontFamily: "IBM Plex Mono" }}>
-          <span style={{ color: "var(--text-muted)" }}>Question {current + 1} of {QUESTIONS.length}</span>
-          <span style={{ color: "var(--text-muted)" }}>{answered} answered</span>
+      {/* Progress & Stepper Bar */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontFamily: "IBM Plex Mono", color: "var(--text-muted)" }}>
+          <span>ITEM {current + 1} OF {QUESTIONS.length}</span>
+          <span>{answered} OF {QUESTIONS.length} COMPLETED</span>
         </div>
         <div className="breath-line">
           <motion.div
             className="breath-line-fill"
             animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           />
-        </div>
-        {/* Step dots */}
-        <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-          {QUESTIONS.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => goTo(i)}
-              style={{
-                width: i === current ? 24 : 8, height: 8, borderRadius: 4,
-                background: i === current ? "var(--teal)" : answers[i] !== null ? "var(--teal-dark)" : "rgba(255,255,255,0.07)",
-                border: "none", cursor: "pointer",
-                transition: "all 0.5s cubic-bezier(0.16,1,0.3,1)",
-                opacity: i === current ? 1 : 0.7,
-              }}
-            />
-          ))}
         </div>
       </div>
 
-      {/* Question card with AnimatePresence */}
+      {/* Question Card with AnimatePresence */}
       <div style={{ position: "relative" }}>
         <AnimatePresence mode="wait" custom={dir}>
           <motion.div
@@ -120,21 +112,40 @@ export default function AssessmentPage() {
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
           >
-            <div className="bento-card" style={{ height: "100%", display: "flex", flexDirection: "column", gap: 24 }}>
-              {/* Question text */}
+            <div className="bento-card" style={{ padding: "40px 36px", display: "flex", flexDirection: "column", gap: 32, border: "1px solid var(--bg-border)" }}>
+              {/* Question Text */}
               <div>
-                <div style={{ fontSize: 10, color: "var(--teal)", fontFamily: "IBM Plex Mono", letterSpacing: "0.1em", marginBottom: 12 }}>
-                  QUESTION {current + 1} · PAST 2 WEEKS
+                <div style={{ fontSize: 11, color: "var(--citron)", fontFamily: "IBM Plex Mono", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: 16 }}>
+                  OVER THE LAST 2 WEEKS, HOW OFTEN HAVE YOU BEEN BOTHERED BY:
                 </div>
-                <div style={{ fontFamily: "Fraunces, Georgia, serif", fontSize: "clamp(1.1rem,2vw,1.4rem)", fontWeight: 600, lineHeight: 1.45, color: "var(--text-primary)" }}>
-                  {QUESTIONS[current]}
+                <div style={{ fontFamily: "Fraunces, serif", fontSize: "clamp(1.4rem, 2.4vw, 1.85rem)", fontWeight: 600, lineHeight: 1.35, color: "#FFFFFF", letterSpacing: "-0.03em" }}>
+                  "{QUESTIONS[current]}"
                 </div>
               </div>
 
+              {/* Crisis Intervention Alert on Question 9 */}
+              {isQuestion9Positive && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+                  style={{
+                    padding: "16px 20px", borderRadius: 12, background: "rgba(244, 63, 94, 0.12)",
+                    border: "1px solid rgba(244, 63, 94, 0.3)", display: "flex", alignItems: "flex-start", gap: 14
+                  }}
+                >
+                  <Heart size={20} style={{ color: "#F43F5E", flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#FDA4AF" }}>Support is available right now.</div>
+                    <div style={{ fontSize: 12, color: "#E2E8F0", marginTop: 2, lineHeight: 1.6 }}>
+                      If you are feeling overwhelmed, you are never alone. Free, confidential support is available 24/7 by dialing or texting <strong>988</strong> (Suicide &amp; Crisis Lifeline).
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Answer options */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {LABELS.map(({ label, sub }, score) => {
                   const selected = answers[current] === score;
                   const color = OPTION_COLORS[score];
@@ -142,69 +153,69 @@ export default function AssessmentPage() {
                     <motion.button
                       key={score}
                       onClick={() => update(score)}
-                      whileHover={{ scale: 1.015 }}
-                      whileTap={{ scale: 0.985 }}
-                      transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.99 }}
+                      transition={{ duration: 0.3 }}
                       className={`answer-option ${selected ? "selected" : ""}`}
+                      style={{
+                        padding: "18px 24px",
+                        border: selected ? `1.5px solid ${color}` : "1px solid var(--bg-border)",
+                        background: selected ? "rgba(29, 107, 95, 0.14)" : "var(--bg-elevated)",
+                        display: "flex", alignItems: "center", gap: 16
+                      }}
                     >
                       {/* Custom radio circle */}
                       <div style={{
                         width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
-                        border: `2px solid ${selected ? color : "rgba(255,255,255,0.15)"}`,
+                        border: `2px solid ${selected ? color : "rgba(255,255,255,0.2)"}`,
                         background: selected ? `${color}25` : "transparent",
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        transition: "all 0.5s cubic-bezier(0.16,1,0.3,1)",
                       }}>
                         {selected && (
-                          <motion.div
-                            initial={{ scale: 0 }} animate={{ scale: 1 }}
-                            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                            style={{ width: 8, height: 8, borderRadius: "50%", background: color }}
-                          />
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
                         )}
                       </div>
                       <div style={{ flex: 1, textAlign: "left" }}>
-                        <div style={{ fontSize: 14, fontWeight: selected ? 600 : 400, color: selected ? "var(--text-primary)" : "var(--text-secondary)", transition: "color 0.5s ease" }}>
+                        <div style={{ fontSize: 15, fontWeight: selected ? 600 : 500, color: selected ? "#FFFFFF" : "var(--text-secondary)" }}>
                           {label}
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{sub}</div>
+                        <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>{sub}</div>
                       </div>
-                      {selected && <CheckCircle2 size={16} style={{ color, flexShrink: 0 }} />}
+                      {selected && <CheckCircle2 size={18} style={{ color, flexShrink: 0 }} />}
                     </motion.button>
                   );
                 })}
               </div>
 
               {/* Navigation */}
-              <div style={{ display: "flex", gap: 10, paddingTop: 8, borderTop: "1px solid var(--bg-border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 16, borderTop: "1px solid var(--bg-border)" }}>
                 <button
                   className="btn btn-secondary btn-sm"
                   disabled={current === 0}
                   onClick={() => goTo(current - 1)}
+                  style={{ opacity: current === 0 ? 0.3 : 1 }}
                 >
                   <ArrowLeft size={13} /> Back
                 </button>
-                <div style={{ flex: 1 }} />
+
                 {!isLast ? (
-                  <motion.button
+                  <button
                     className="btn btn-primary btn-sm"
                     disabled={answers[current] === null}
                     onClick={() => goTo(current + 1)}
-                    whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                    transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                    style={{ background: "var(--brand)", color: "#FFFFFF", borderColor: "transparent", opacity: answers[current] === null ? 0.4 : 1 }}
                   >
-                    Continue <ArrowRight size={13} />
-                  </motion.button>
+                    Next Prompt <ArrowRight size={13} />
+                  </button>
                 ) : (
-                  <motion.button
+                  <button
                     className="btn btn-primary btn-sm"
                     disabled={answered !== 9 || isSubmitting}
                     onClick={submit}
-                    whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-                    transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                    style={{ background: "var(--citron)", color: "#151716", borderColor: "transparent", fontWeight: 700 }}
                   >
-                    {isSubmitting ? "Analyzing..." : "Submit & Analyze"} <Zap size={13} />
-                  </motion.button>
+                    {isSubmitting ? "Synthesizing..." : "Complete & Stratify Risk"} <Zap size={13} />
+                  </button>
                 )}
               </div>
 
@@ -218,15 +229,13 @@ export default function AssessmentPage() {
         </AnimatePresence>
       </div>
 
-      {/* Reassurance note */}
-      <motion.div
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-        transition={{ delay: 0.5, duration: 0.8 }}
-        style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.7 }}
-      >
-        Your responses are private and encrypted. This assessment does not replace professional clinical evaluation.
-      </motion.div>
+      {/* Trust & Privacy Notice */}
+      <div style={{ textAlign: "center", fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+        <ShieldCheck size={14} style={{ color: "var(--emerald)" }} />
+        <span>Client-side encryption. Results are used solely to establish your longitudinal wellness baseline.</span>
+      </div>
 
     </div>
   );
 }
+

@@ -65,27 +65,11 @@ async def daily_cleanup_and_aggregation_loop():
             logger.error(f"Background daily scheduler error: {e}")
 
 
-async def google_fit_background_sync_loop():
-    """Background scheduler task to periodically sync Google Fit telemetry for connected users every 30 minutes."""
-    logger.info("✓ Background Google Fit telemetry scheduler started (interval: 30 mins)")
-    while True:
-        try:
-            await asyncio.sleep(1800) # 30 minutes
-            from app.db.session import SessionLocal
-            from app.services.google_fit_service import run_scheduled_google_fit_sync
-            
-            db = SessionLocal()
-            try:
-                await run_scheduled_google_fit_sync(db)
-            except Exception as e:
-                logger.error(f"Error in background Google Fit sync job: {e}")
-            finally:
-                db.close()
-        except asyncio.CancelledError:
-            logger.info("Background Google Fit scheduler cancelled.")
-            break
-        except Exception as e:
-            logger.error(f"Background Google Fit scheduler loop error: {e}")
+# NOTE: Google Fit active background sync has been REMOVED (Phase 2).
+# Active sensor collection now comes exclusively from the Healthly Companion Android APK
+# via POST /api/v1/mobile-health/sync.
+# Historical records with data_source="google_fit" are preserved in the database.
+# The Google Fit OAuth endpoints remain available for viewing historical data only.
 
 
 @app.on_event("startup")
@@ -110,13 +94,14 @@ async def load_ml_models() -> None:
     from app.api.v1.endpoints.wifi_sensor import websocket_heartbeat_monitor
     asyncio.create_task(websocket_heartbeat_monitor())
 
-    # Start background Google Fit sync loop
-    asyncio.create_task(google_fit_background_sync_loop())
+    # Google Fit active background sync is DISABLED (Phase 2).
+    # Native Android APK is now the exclusive active sensor source.
 
 
 
 
 from app.api.v1.endpoints.wifi_sensor import router as wifi_router
+from app.api.v1.endpoints.video_call import ws_router as video_call_ws_router
 import asyncio
 from fastapi import WebSocket, WebSocketDisconnect
 from jose import jwt, JWTError
@@ -127,6 +112,7 @@ from app.api.v1.endpoints.google_fit import router as google_fit_router
 
 app.include_router(api_router, prefix=settings.api_v1_prefix)
 app.include_router(wifi_router)
+app.include_router(video_call_ws_router)
 app.include_router(google_fit_router, prefix="/api/auth/google-fit", tags=["google-fit-root"])
 
 

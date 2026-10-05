@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     project_name: str = "Healthly API"
     api_v1_prefix: str = "/api/v1"
     secret_key: str = "change_me"
+    data_encryption_key: str = ""
     access_token_expire_minutes: int = 60
     database_url: str = "sqlite:///./healthly.db"
     cors_origins: str = "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174"
@@ -18,6 +19,7 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:8000/api/auth/google-fit/callback"
     app_url: str = "http://localhost:5173"
+    groq_api_key: str = ""
 
     model_config = SettingsConfigDict(
         env_file=("backend/.env", ".env"),

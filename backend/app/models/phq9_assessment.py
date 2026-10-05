@@ -1,9 +1,10 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.session import Base
+from app.db.encrypted_type import EncryptedText
 
 
 class PHQ9Assessment(Base):
@@ -21,8 +22,8 @@ class PHQ9Assessment(Base):
     emotion_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     secondary_emotions: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     concern_areas: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    emotion_rationale: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    emotion_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    emotion_rationale: Mapped[str | None] = mapped_column(EncryptedText, nullable=True)
+    emotion_summary: Mapped[str | None] = mapped_column(EncryptedText, nullable=True)
     needs_human_review: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     risk_flags: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     agent_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -34,7 +35,7 @@ class PHQ9Assessment(Base):
     physical_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     functional_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Consultant review fields
-    clinical_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    clinical_note: Mapped[str | None] = mapped_column(EncryptedText, nullable=True)
     reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

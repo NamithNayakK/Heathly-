@@ -75,23 +75,68 @@ def create_access_token(subject: str) -> str:
     return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
 
 
-def get_token_fernet():
+def get_data_cipher():
     from cryptography.fernet import Fernet
-    key_bytes = hashlib.sha256(settings.secret_key.encode("utf-8")).digest()
-    fernet_key = base64.urlsafe_b64encode(key_bytes)
-    return Fernet(fernet_key)
+    key = settings.data_encryption_key
+    if not key:
+        raise ValueError("DATA_ENCRYPTION_KEY environment variable is required.")
+    return Fernet(key.encode("utf-8"))
+
+
+def get_token_fernet():
+    """Returns primary data cipher, with fallback capability for legacy tokens."""
+    return get_data_cipher()
+
+
+def encrypt_data(plain_text: str | None) -> str | None:
+    """Encrypts plain text string using DATA_ENCRYPTION_KEY via Fernet."""
+    if not plain_text:
+        return plain_text
+    cipher = get_data_cipher()
+    return cipher.encrypt(plain_text.encode("utf-8")).decode("utf-8")
+
+
+def decrypt_data(cipher_text: str | None) -> str | None:
+    """
+    Decrypts ciphertext string using DATA_ENCRYPTION_KEY.
+    Gracefully falls back to plain text if string is not encrypted (backward compatibility).
+    """
+    if not cipher_text:
+        return cipher_text
+
+    from cryptography.fernet import InvalidToken
+
+    cipher = get_data_cipher()
+    try:
+        return cipher.decrypt(cipher_text.encode("utf-8")).decode("utf-8")
+    except (InvalidToken, binascii.Error, ValueError):
+        # Backward compatibility: text was stored before encryption was enabled
+        return cipher_text
 
 
 def encrypt_token(token: str) -> str:
     if not token:
         return ""
-    f = get_token_fernet()
-    return f.encrypt(token.encode("utf-8")).decode("utf-8")
+    return encrypt_data(token) or ""
 
 
 def decrypt_token(encrypted_token: str) -> str:
     if not encrypted_token:
         return ""
-    f = get_token_fernet()
-    return f.decrypt(encrypted_token.encode("utf-8")).decode("utf-8")
+
+    from cryptography.fernet import Fernet, InvalidToken
+
+    # First attempt with modern DATA_ENCRYPTION_KEY
+    try:
+        return get_data_cipher().decrypt(encrypted_token.encode("utf-8")).decode("utf-8")
+    except Exception:
+        pass
+
+    # Fallback to legacy secret_key derivation for tokens encrypted before separation
+    try:
+        key_bytes = hashlib.sha256(settings.secret_key.encode("utf-8")).digest()
+        legacy_key = base64.urlsafe_b64encode(key_bytes)
+        return Fernet(legacy_key).decrypt(encrypted_token.encode("utf-8")).decode("utf-8")
+    except (InvalidToken, binascii.Error, ValueError):
+        return encrypted_token
 

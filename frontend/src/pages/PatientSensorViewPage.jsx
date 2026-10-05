@@ -84,19 +84,36 @@ export default function PatientSensorViewPage() {
   const latestSensor = sensorData?.sensor_records?.[0] || null;
   const sensorHistory = sensorData?.sensor_records || [];
 
-  // Calculate averages
-  const avgHRV = sensorHistory.length > 0
-    ? sensorHistory.reduce((sum, r) => sum + r.heart_rate_variability, 0) / sensorHistory.length
+  // Averages — use correct native mobile fields with HRV/GSR as optional extras
+  const avgHR = sensorHistory.length > 0 && sensorHistory.some(r => r.heart_rate)
+    ? sensorHistory.filter(r => r.heart_rate).reduce((sum, r) => sum + r.heart_rate, 0) / sensorHistory.filter(r => r.heart_rate).length
     : null;
-  const avgStress = sensorHistory.length > 0
-    ? sensorHistory.reduce((sum, r) => sum + r.stress_index, 0) / sensorHistory.length
+  const avgHRV = sensorHistory.length > 0 && sensorHistory.some(r => r.heart_rate_variability)
+    ? sensorHistory.filter(r => r.heart_rate_variability).reduce((sum, r) => sum + r.heart_rate_variability, 0) / sensorHistory.filter(r => r.heart_rate_variability).length
     : null;
-  const avgSleep = sensorHistory.length > 0
-    ? sensorHistory.reduce((sum, r) => sum + r.sleep_duration_hours, 0) / sensorHistory.length
+  const avgSleep = sensorHistory.length > 0 && sensorHistory.some(r => r.sleep_duration_hours)
+    ? sensorHistory.filter(r => r.sleep_duration_hours).reduce((sum, r) => sum + r.sleep_duration_hours, 0) / sensorHistory.filter(r => r.sleep_duration_hours).length
     : null;
-  const avgGSR = sensorHistory.length > 0
-    ? sensorHistory.reduce((sum, r) => sum + r.galvanic_skin_response, 0) / sensorHistory.length
+  const avgGSR = sensorHistory.length > 0 && sensorHistory.some(r => r.galvanic_skin_response)
+    ? sensorHistory.filter(r => r.galvanic_skin_response).reduce((sum, r) => sum + r.galvanic_skin_response, 0) / sensorHistory.filter(r => r.galvanic_skin_response).length
     : null;
+  const avgStress = sensorHistory.length > 0 && sensorHistory.some(r => r.stress_index)
+    ? sensorHistory.filter(r => r.stress_index).reduce((sum, r) => sum + r.stress_index, 0) / sensorHistory.filter(r => r.stress_index).length
+    : null;
+  const avgSteps = sensorHistory.length > 0 && sensorHistory.some(r => r.steps)
+    ? Math.round(sensorHistory.filter(r => r.steps).reduce((sum, r) => sum + r.steps, 0) / sensorHistory.filter(r => r.steps).length)
+    : null;
+
+  // GPS and activity session data
+  const gpsSessions = sensorData?.gps_sessions || [];
+  const activitySessions = sensorData?.activity_sessions || [];
+
+  const SOURCE_LABELS = {
+    health_connect: 'Health Connect', android_sensor: 'Android Sensor',
+    activity_recognition: 'Activity Recognition', gps: 'GPS',
+    usage_stats: 'Usage Statistics', manual: 'Manual Entry',
+    google_fit: 'Historical: Google Fit', wifi: 'WiFi Sensor (Legacy)',
+  };
 
   const getRiskColor = (level) => {
     if (!level) return 'var(--text-muted)';
@@ -106,18 +123,28 @@ export default function PatientSensorViewPage() {
     return 'var(--emerald)';
   };
 
+  // Time range filter state
+  const [timeRange, setTimeRange] = useState('7d');
+  const [metricTab, setMetricTab] = useState('hr'); // 'hr', 'steps', 'stress'
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1200, margin: '0 auto', width: '100%' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <button className="btn btn-ghost btn-xs" onClick={() => navigate('/dashboard')}>
-              <ArrowLeft style={{ width: 12, height: 12 }} /> Dashboard
-            </button>
+          <button 
+            className="btn btn-ghost btn-xs" 
+            onClick={() => navigate('/dashboard')}
+            style={{ marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}
+          >
+            <ArrowLeft style={{ width: 14, height: 14 }} /> Return to Dashboard
+          </button>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 'clamp(1.75rem, 3vw, 2.25rem)', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
+            Patient Physiological Telemetry
           </div>
-          <div className="page-title">Patient Sensor Analysis</div>
-          <div className="page-subtitle">Select a patient by name to view their physiological telemetry data</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
+            Continuous biometric signals, wearable integration streams, and clinical sensor analysis
+          </div>
         </div>
       </div>
 
@@ -271,6 +298,11 @@ export default function PatientSensorViewPage() {
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                   {sensorData.patient?.email}
                 </div>
+                {sensorData.patient?.device_id && (
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', marginTop: 2 }}>
+                    Device: {sensorData.patient.device_id.slice(0, 20)}…
+                  </div>
+                )}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -300,12 +332,232 @@ export default function PatientSensorViewPage() {
             </div>
           </div>
 
-          {/* Latest Reading Gauges */}
+          {/* AI Disclaimer */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.15)' }}>
+            <AlertTriangle style={{ width: 13, height: 13, color: '#FBBF24', flexShrink: 0, marginTop: 1 }} />
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              <strong style={{ color: '#FBBF24' }}>Prototype / Experimental</strong> — Sensor metrics are not clinically validated. Use as supplementary context only.
+            </span>
+          </div>
+
+          {/* Sensor Timeline Analysis with 7d / 30d / Custom Time Filters */}
+          <div className="card" style={{ padding: '24px 28px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 20 }}>
+              <div>
+                <div style={{ fontFamily: 'Fraunces, serif', fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Physiological Longitudinal Timeline
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  Continuous biometric progression across recent monitoring intervals
+                </div>
+              </div>
+
+              {/* Time Range Filter Pills */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-elevated)', padding: '4px 6px', borderRadius: 9999, border: '1px solid var(--bg-border)' }}>
+                {[
+                  { id: '7d', label: '7 days' },
+                  { id: '30d', label: '30 days' },
+                  { id: 'custom', label: 'Custom' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setTimeRange(tab.id)}
+                    style={{
+                      padding: '5px 14px',
+                      borderRadius: 9999,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      fontFamily: 'IBM Plex Mono, monospace',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      background: timeRange === tab.id ? 'var(--brand)' : 'transparent',
+                      color: timeRange === tab.id ? '#ffffff' : 'var(--text-secondary)',
+                      boxShadow: timeRange === tab.id ? '0 2px 8px rgba(29, 107, 95, 0.25)' : 'none',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Metric Switcher */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, borderBottom: '1px solid var(--bg-border)', paddingBottom: 12 }}>
+              {[
+                { id: 'hr', label: 'Heart Rate & HRV', unit: 'bpm / ms' },
+                { id: 'steps', label: 'Step Activity', unit: 'steps' },
+                { id: 'stress', label: 'Stress & Sleep', unit: 'index / hrs' },
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setMetricTab(tab.id)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: metricTab === tab.id ? '2px solid var(--brand)' : '2px solid transparent',
+                    padding: '6px 12px',
+                    fontSize: 12,
+                    fontWeight: metricTab === tab.id ? 600 : 500,
+                    color: metricTab === tab.id ? 'var(--text-primary)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>({tab.unit})</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Large Visual Graph with Generous Whitespace */}
+            {sensorHistory.length > 0 ? (() => {
+              const count = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : sensorHistory.length;
+              const records = sensorHistory.slice(0, count).slice().reverse();
+              
+              // Extract series based on metricTab
+              let values = [];
+              let labelUnit = '';
+              let strokeColor = 'var(--teal)';
+              
+              if (metricTab === 'hr') {
+                values = records.map(r => r.heart_rate || r.heart_rate_variability || 72);
+                labelUnit = 'bpm';
+                strokeColor = '#F87171';
+              } else if (metricTab === 'steps') {
+                values = records.map(r => r.steps || 0);
+                labelUnit = 'steps';
+                strokeColor = 'var(--brand)';
+              } else {
+                values = records.map(r => (r.stress_index != null ? r.stress_index * 100 : (r.sleep_duration_hours ? r.sleep_duration_hours * 10 : 50)));
+                labelUnit = '%';
+                strokeColor = '#A78BFA';
+              }
+
+              const maxVal = Math.max(...values, 10);
+              const minVal = Math.min(...values, 0);
+              const range = maxVal - minVal || 1;
+              const width = 800;
+              const height = 220;
+              const padding = 40;
+
+              const points = values.map((val, idx) => {
+                const x = padding + (idx / Math.max(1, values.length - 1)) * (width - 2 * padding);
+                const y = height - padding - ((val - minVal) / range) * (height - 2 * padding);
+                return { x, y, val };
+              });
+
+              const pathString = points.length > 0
+                ? `M ${points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L ')}`
+                : '';
+              
+              const areaString = points.length > 0
+                ? `${pathString} L ${points[points.length - 1].x},${height - padding} L ${points[0].x},${height - padding} Z`
+                : '';
+
+              return (
+                <div style={{ width: '100%', overflowX: 'auto', padding: '10px 0' }}>
+                  <svg viewBox={`0 0 ${width} ${height}`} style={{ width: '100%', height: 240, overflow: 'visible' }}>
+                    <defs>
+                      <linearGradient id="sensorTimelineGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={strokeColor} stopOpacity="0.25" />
+                        <stop offset="100%" stopColor={strokeColor} stopOpacity="0.0" />
+                      </linearGradient>
+                    </defs>
+
+                    {/* Horizontal gridlines */}
+                    {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+                      const yPos = height - padding - ratio * (height - 2 * padding);
+                      const gridVal = Math.round(minVal + ratio * range);
+                      return (
+                        <g key={i}>
+                          <line
+                            x1={padding}
+                            y1={yPos}
+                            x2={width - padding}
+                            y2={yPos}
+                            stroke="var(--bg-border)"
+                            strokeDasharray="4 4"
+                            strokeWidth="1"
+                          />
+                          <text
+                            x={padding - 8}
+                            y={yPos + 3}
+                            fill="var(--text-muted)"
+                            fontSize="9"
+                            fontFamily="IBM Plex Mono"
+                            textAnchor="end"
+                          >
+                            {gridVal}
+                          </text>
+                        </g>
+                      );
+                    })}
+
+                    {/* Gradient Area Fill */}
+                    {areaString && (
+                      <path d={areaString} fill="url(#sensorTimelineGrad)" />
+                    )}
+
+                    {/* Main Line */}
+                    {pathString && (
+                      <path
+                        d={pathString}
+                        fill="none"
+                        stroke={strokeColor}
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    )}
+
+                    {/* Data Points */}
+                    {points.map((p, i) => (
+                      <g key={i}>
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r="4"
+                          fill="var(--bg-surface)"
+                          stroke={strokeColor}
+                          strokeWidth="2"
+                        />
+                        {/* Date label at bottom */}
+                        <text
+                          x={p.x}
+                          y={height - padding + 18}
+                          fill="var(--text-muted)"
+                          fontSize="9"
+                          fontFamily="IBM Plex Mono"
+                          textAnchor="middle"
+                        >
+                          {records[i]?.created_at
+                            ? new Date(records[i].created_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })
+                            : `R${i + 1}`}
+                        </text>
+                      </g>
+                    ))}
+                  </svg>
+                </div>
+              );
+            })() : (
+              <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                No historical records available for the selected range.
+              </div>
+            )}
+          </div>
+
+          {/* Latest Biometric Gauges & Telemetry Cards */}
           {latestSensor ? (
             <>
               <div>
-                <div className="section-title">Latest Physiological Reading</div>
-                <div className="grid-4" style={{ gap: 12 }}>
+                <div style={{ fontFamily: 'Fraunces, serif', fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>
+                  Latest Physiological Reading
+                </div>
+                <div className="grid-4" style={{ gap: 14 }}>
                   <SensorGauge
                     label="Heart Rate Variability"
                     value={latestSensor.heart_rate_variability}
@@ -337,87 +589,109 @@ export default function PatientSensorViewPage() {
                 </div>
               </div>
 
-              {/* Averages */}
-              <div className="card card-accent-blue" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div className="section-title" style={{ marginBottom: 0 }}>Historical Averages ({sensorHistory.length} readings)</div>
+              {/* Native Mobile Metrics Summary */}
+              <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 16, background: 'var(--bg-surface)', border: '1px solid var(--bg-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Device Telemetry Summary</div>
+                  {latestSensor?.data_source && (
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', padding: '3px 8px', borderRadius: 4, background: 'var(--bg-elevated)' }}>
+                      Source: {SOURCE_LABELS[latestSensor.data_source] || latestSensor.data_source}
+                    </span>
+                  )}
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
                   {[
-                    { label: 'Avg HRV', value: avgHRV?.toFixed(1), unit: 'ms', color: 'var(--rose)' },
-                    { label: 'Avg GSR', value: avgGSR?.toFixed(2), unit: 'μS', color: 'var(--cyan)' },
-                    { label: 'Avg Sleep', value: avgSleep?.toFixed(1), unit: 'hrs', color: 'var(--blue)' },
-                    { label: 'Avg Stress', value: avgStress?.toFixed(2), unit: '', color: avgStress >= 0.7 ? 'var(--rose)' : avgStress >= 0.4 ? 'var(--amber)' : 'var(--emerald)' },
+                    { label: 'Steps', value: latestSensor?.steps?.toLocaleString(), unit: '', color: 'var(--teal)' },
+                    { label: 'Heart Rate', value: latestSensor?.heart_rate, unit: 'bpm', color: '#F87171' },
+                    { label: 'Sleep', value: latestSensor?.sleep_duration_hours?.toFixed(1), unit: 'hrs', color: 'var(--lav)' },
+                    { label: 'Screen Time', value: latestSensor?.screen_time_minutes, unit: 'min', color: '#A78BFA' },
                   ].map(item => (
-                    <div key={item.label} style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono', letterSpacing: '0.06em', marginBottom: 4 }}>
+                    <div key={item.label} style={{ textAlign: 'center', padding: '12px 8px', borderRadius: 8, background: 'var(--bg-elevated)' }}>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono', letterSpacing: '0.06em', marginBottom: 6 }}>
                         {item.label}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 3 }}>
-                        <span style={{ fontSize: 20, fontWeight: 700, color: item.color, fontFamily: 'IBM Plex Sans' }}>{item.value ?? '—'}</span>
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.unit}</span>
+                        <span style={{ fontSize: 24, fontWeight: 700, color: item.value != null ? item.color : 'var(--text-muted)', fontFamily: 'IBM Plex Sans' }}>
+                          {item.value ?? '—'}
+                        </span>
+                        {item.unit && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.unit}</span>}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Stress Trend Analysis */}
-              <div className="card card-accent-rose" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div className="section-title" style={{ marginBottom: 0 }}>Stress Trend Analysis</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                  <div style={{
-                    padding: '6px 12px', borderRadius: 8,
-                    background: avgStress >= 0.7 ? 'var(--rose-dim)' : avgStress >= 0.4 ? 'var(--amber-dim)' : 'var(--emerald-dim)',
-                    border: `1px solid ${avgStress >= 0.7 ? 'rgba(244,63,94,0.2)' : avgStress >= 0.4 ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'}`,
-                  }}>
-                    <span style={{
-                      fontSize: 12, fontWeight: 600,
-                      color: avgStress >= 0.7 ? 'var(--rose)' : avgStress >= 0.4 ? 'var(--amber)' : 'var(--emerald)',
-                    }}>
-                      {avgStress >= 0.7 ? '⚠ High Stress Pattern' : avgStress >= 0.4 ? '◎ Moderate Stress' : '✓ Low Stress Pattern'}
-                    </span>
-                  </div>
-                  {sensorData.last_assessment?.mental_state_label && (
-                    <span className="badge badge-violet">{sensorData.last_assessment.mental_state_label}</span>
-                  )}
-                  {sensorData.last_assessment?.dominant_emotion && (
-                    <span className="emotion-chip">{sensorData.last_assessment.dominant_emotion}</span>
-                  )}
-                </div>
-
-                {/* Mini bar chart of stress values */}
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 60 }}>
-                  {sensorHistory.slice(0, 20).reverse().map((record, i) => {
-                    const height = Math.max(4, record.stress_index * 60);
-                    const color = record.stress_index >= 0.7 ? 'var(--rose)' : record.stress_index >= 0.4 ? 'var(--amber)' : 'var(--emerald)';
-                    return (
-                      <div
-                        key={i}
-                        title={`Stress: ${(record.stress_index * 100).toFixed(0)}% — ${new Date(record.created_at).toLocaleDateString()}`}
-                        style={{
-                          flex: 1, height, borderRadius: '3px 3px 0 0',
-                          background: color, opacity: 0.7,
-                          transition: 'opacity 0.2s ease',
-                          cursor: 'pointer',
-                        }}
-                        onMouseEnter={(e) => e.target.style.opacity = 1}
-                        onMouseLeave={(e) => e.target.style.opacity = 0.7}
-                      />
-                    );
-                  })}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
-                  <span>Oldest</span>
-                  <span>Most Recent</span>
+              {/* Historical Averages */}
+              <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14, background: 'var(--bg-surface)', border: '1px solid var(--bg-border)' }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Historical Aggregates ({sensorHistory.length} readings)</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+                  {[
+                    { label: 'Avg Heart Rate', value: avgHR?.toFixed(0), unit: 'bpm', color: '#F87171' },
+                    { label: 'Avg HRV', value: avgHRV?.toFixed(1), unit: 'ms', color: 'var(--rose)' },
+                    { label: 'Avg Sleep', value: avgSleep?.toFixed(1), unit: 'hrs', color: 'var(--blue)' },
+                    { label: 'Avg Daily Steps', value: avgSteps?.toLocaleString(), unit: '', color: 'var(--teal)' },
+                  ].map(item => (
+                    <div key={item.label} style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase', fontFamily: 'IBM Plex Mono', letterSpacing: '0.06em', marginBottom: 4 }}>
+                        {item.label}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 3 }}>
+                        <span style={{ fontSize: 22, fontWeight: 700, color: item.value != null ? item.color : 'var(--text-muted)', fontFamily: 'IBM Plex Sans' }}>
+                          {item.value ?? '—'}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{item.unit}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </>
           ) : (
-            <div className="card" style={{ textAlign: 'center', padding: '40px 20px' }}>
+            <div className="card" style={{ textAlign: 'center', padding: '40px 20px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-lg)' }}>
               <Activity style={{ width: 32, height: 32, color: 'var(--text-muted)', margin: '0 auto 12px' }} />
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>No Sensor Data Available</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                This patient has no recorded physiological sensor data yet.
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>No Recent Telemetry Records</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                This patient has no recorded physiological sensor readings in the active queue yet.
               </div>
+            </div>
+          )}
+
+          {/* GPS Sessions */}
+          {gpsSessions.length > 0 && (
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-lg)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>GPS Sessions</div>
+              {gpsSessions.map(g => (
+                <div key={g.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-elevated)', borderRadius: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{g.distance_km} km</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{g.duration_minutes} min · {g.average_speed_kmh ?? '—'} km/h avg</div>
+                  </div>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
+                    {new Date(g.start_time).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Activity Sessions */}
+          {activitySessions.length > 0 && (
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10, background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-lg)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Activity Sessions</div>
+              {activitySessions.slice(0, 8).map(a => (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-elevated)', borderRadius: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 16 }}>{{ walking: '🚶', running: '🏃', cycling: '🚴', vehicle: '🚗', still: '🧘', unknown: '❓' }[a.activity_type] || '❓'}</span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{a.activity_type}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.duration_minutes} min · {a.confidence}% confidence</div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
+                    {new Date(a.start_time).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
 
@@ -430,10 +704,12 @@ export default function PatientSensorViewPage() {
                   <thead>
                     <tr>
                       <th>Date</th>
-                      <th>HRV (ms)</th>
-                      <th>GSR (μS)</th>
+                      <th>Source</th>
+                      <th>Steps</th>
+                      <th>Heart Rate</th>
                       <th>Sleep (hrs)</th>
-                      <th>Stress Index</th>
+                      <th>HRV (ms)</th>
+                      <th>Stress</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -442,18 +718,26 @@ export default function PatientSensorViewPage() {
                         <td style={{ fontFamily: 'IBM Plex Mono', fontSize: 11 }}>
                           {record.created_at ? new Date(record.created_at).toLocaleString() : '—'}
                         </td>
-                        <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {record.heart_rate_variability?.toFixed(1)}
-                        </td>
-                        <td>{record.galvanic_skin_response?.toFixed(2)}</td>
-                        <td>{record.sleep_duration_hours?.toFixed(1)}</td>
                         <td>
-                          <span className={`badge ${
-                            record.stress_index >= 0.7 ? 'badge-rose' :
-                            record.stress_index >= 0.4 ? 'badge-amber' : 'badge-live'
-                          }`}>
-                            {(record.stress_index * 100).toFixed(0)}%
+                          <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 3, background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>
+                            {SOURCE_LABELS[record.data_source] || record.data_source || '—'}
                           </span>
+                        </td>
+                        <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {record.steps?.toLocaleString() ?? '—'}
+                        </td>
+                        <td>{record.heart_rate != null ? `${record.heart_rate} bpm` : '—'}</td>
+                        <td>{record.sleep_duration_hours?.toFixed(1) ?? '—'}</td>
+                        <td>{record.heart_rate_variability?.toFixed(1) ?? '—'}</td>
+                        <td>
+                          {record.stress_index != null ? (
+                            <span className={`badge ${
+                              record.stress_index >= 0.7 ? 'badge-rose' :
+                              record.stress_index >= 0.4 ? 'badge-amber' : 'badge-live'
+                            }`}>
+                              {(record.stress_index * 100).toFixed(0)}%
+                            </span>
+                          ) : '—'}
                         </td>
                       </tr>
                     ))}

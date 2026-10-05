@@ -227,13 +227,15 @@ export default function AdminDashboard() {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span className="badge badge-lav" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              <Shield style={{ width: 12, height: 12 }} /> Admin Workspace
+            <span style={{ fontSize: 11, fontFamily: 'IBM Plex Mono, monospace', textTransform: "uppercase", letterSpacing: "0.06em", color: 'var(--brand)', background: 'var(--brand-light)', padding: '2px 8px', borderRadius: 4, fontWeight: 600 }}>
+              Administration Console
             </span>
           </div>
-          <div className="page-title" style={{ marginTop: 4 }}>Platform Administration</div>
-          <div className="page-subtitle">
-            System control panel, risk overview, user role management & forum moderation — {userName}
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 'clamp(1.75rem, 3vw, 2.25rem)', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1.15, marginTop: 6 }}>
+            Platform Operations & Governance
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
+            System control panel, clinical risk telemetry, user role orchestration & algorithmic governance — {userName}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>

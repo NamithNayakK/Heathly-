@@ -153,6 +153,52 @@ export const api = {
   getGoogleFitStatus: (userId) => request(`/auth/google-fit/status${userId ? `?user_id=${userId}` : ""}`),
   pullGoogleFitData: (userId) => request(`/auth/google-fit/pull-now${userId ? `?user_id=${userId}` : ""}`, { method: "POST" }),
   submitManualSensorData: (payload, userId) => request(`/auth/google-fit/manual${userId ? `?user_id=${userId}` : ""}`, { method: "POST", body: JSON.stringify(payload) }),
+
+  getCompanionStatus: () => request("/chat/companion-status", { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }),
+
+  // Doctor video-call feature
+  listDoctors: () => request("/video-call/doctors"),
+  requestCall: (doctorId) => request("/video-call/request", { method: "POST", body: JSON.stringify({ doctor_id: doctorId }) }),
+  getPendingCalls: () => request("/video-call/pending", { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }),
+  getMyCalls: () => request("/video-call/mine", { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } }),
+  getCallRoom: (roomId) => request(`/video-call/room/${roomId}`),
+  acceptCall: (callId) => request(`/video-call/${callId}/accept`, { method: "POST" }),
+  rejectCall: (callId) => request(`/video-call/${callId}/reject`, { method: "POST" }),
+  endCall: (callId) => request(`/video-call/${callId}/end`, { method: "POST" }),
+  getCallSocketUrl: (roomId) => {
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      ? `${window.location.hostname}:8000`
+      : window.location.host;
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
+    return `${wsProtocol}//${host}/ws/video-call/${roomId}?token=${encodeURIComponent(token)}`;
+  },
+
+  // ── Native Android Mobile Health API ─────────────────────────────────────────
+  // Primary source: Healthly Companion APK via POST /api/v1/mobile-health/sync
+  // These replace the Google Fit active data flow.
+
+  getMobileHealthToday: () =>
+    request("/mobile-health/today", { headers: { "Cache-Control": "no-cache" } }),
+
+  getMobileHealthHistory: (days = 7) =>
+    request(`/mobile-health/history?days=${days}`, { headers: { "Cache-Control": "no-cache" } }),
+
+  getMobileHealthTrends: (range = "7d") =>
+    request(`/mobile-health/trends?range=${range}`, { headers: { "Cache-Control": "no-cache" } }),
+
+  getMobileHealthActivity: (days = 1) =>
+    request(`/mobile-health/activity?days=${days}`, { headers: { "Cache-Control": "no-cache" } }),
+
+  getMobileHealthStatus: () =>
+    request("/mobile-health/status", { headers: { "Cache-Control": "no-cache" } }),
+
+  getPatientMobileSensorData: (patientId) =>
+    request(`/mobile-health/patient/${patientId}/today`, { headers: { "Cache-Control": "no-cache" } }),
+
+  // Manual sync trigger — for testing via dashboard
+  postMobileSync: (payload) =>
+    request("/mobile-health/sync", { method: "POST", body: JSON.stringify(payload) }),
 };
 
 

@@ -79,70 +79,70 @@ export default function ConsultantDashboard() {
   }).length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1200, margin: '0 auto', width: '100%' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <div className="page-title">Consultant Dashboard</div>
-          <div className="page-subtitle">Welcome back, Dr. {userName} — manage your patients and consultations</div>
+          <div style={{ fontFamily: 'Fraunces, serif', fontSize: 'clamp(1.75rem, 3vw, 2.25rem)', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1.15 }}>
+            Clinical Consultant Console
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
+            Active patient roster, stratified psychiatric risk queues, and longitudinal telemedicine oversight · Dr. {userName}
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
           <button className="btn btn-secondary btn-sm" onClick={() => navigate('/patient-queue')}>
-            <Users style={{ width: 13, height: 13 }} /> Patient Queue
+            <Users style={{ width: 14, height: 14 }} /> Patient Queue
           </button>
           <button className="btn btn-primary btn-sm" onClick={() => navigate('/patient-sensor-view')}>
-            <Activity style={{ width: 13, height: 13 }} /> Sensor Analysis
+            <Activity style={{ width: 14, height: 14 }} /> Sensor Telemetry
           </button>
         </div>
       </div>
 
       {/* Stats Row */}
-      <div className="grid-4" style={{ gap: 12 }}>
-        <div className="card card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="grid-4" style={{ gap: 14 }}>
+        <div className="card" style={{ padding: '18px 20px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span className="stat-label">Total Patients</span>
-            <div style={{ padding: 6, borderRadius: 6, background: 'var(--cyan-dim)' }}>
-              <Users style={{ width: 14, height: 14, color: 'var(--cyan)' }} />
-            </div>
+            <span style={{ fontSize: 11, fontFamily: 'IBM Plex Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Assigned Patients</span>
+            <Users style={{ width: 16, height: 16, color: 'var(--brand)' }} />
           </div>
-          <span className="stat-value">{patients.length}</span>
+          <span style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'IBM Plex Sans, sans-serif', lineHeight: 1 }}>{patients.length}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Active clinical cohort</span>
         </div>
 
-        <div className="card card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="card" style={{ padding: '18px 20px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span className="stat-label">High Risk</span>
-            <div style={{ padding: 6, borderRadius: 6, background: 'var(--rose-dim)' }}>
-              <AlertTriangle style={{ width: 14, height: 14, color: 'var(--rose)' }} />
-            </div>
+            <span style={{ fontSize: 11, fontFamily: 'IBM Plex Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Severe / High Risk</span>
+            <AlertTriangle style={{ width: 16, height: 16, color: 'var(--rose)' }} />
           </div>
-          <span className="stat-value" style={{ color: highRiskCount > 0 ? 'var(--rose)' : 'var(--text-primary)' }}>{highRiskCount}</span>
+          <span style={{ fontSize: 32, fontWeight: 700, color: highRiskCount > 0 ? 'var(--rose)' : 'var(--text-primary)', fontFamily: 'IBM Plex Sans, sans-serif', lineHeight: 1 }}>{highRiskCount}</span>
+          <span style={{ fontSize: 11, color: 'var(--rose)' }}>Requires immediate review</span>
         </div>
 
-        <div className="card card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="card" style={{ padding: '18px 20px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span className="stat-label">Moderate Risk</span>
-            <div style={{ padding: 6, borderRadius: 6, background: 'var(--amber-dim)' }}>
-              <TrendingUp style={{ width: 14, height: 14, color: 'var(--amber)' }} />
-            </div>
+            <span style={{ fontSize: 11, fontFamily: 'IBM Plex Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Moderate Risk</span>
+            <TrendingUp style={{ width: 16, height: 16, color: 'var(--amber)' }} />
           </div>
-          <span className="stat-value" style={{ color: 'var(--amber)' }}>{mediumRiskCount}</span>
+          <span style={{ fontSize: 32, fontWeight: 700, color: 'var(--amber)', fontFamily: 'IBM Plex Sans, sans-serif', lineHeight: 1 }}>{mediumRiskCount}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Scheduled for follow-up</span>
         </div>
 
-        <div className="card card-sm" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="card" style={{ padding: '18px 20px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span className="stat-label">Low Risk</span>
-            <div style={{ padding: 6, borderRadius: 6, background: 'var(--emerald-dim)' }}>
-              <Heart style={{ width: 14, height: 14, color: 'var(--emerald)' }} />
-            </div>
+            <span style={{ fontSize: 11, fontFamily: 'IBM Plex Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)' }}>Low / Stable</span>
+            <Heart style={{ width: 16, height: 16, color: 'var(--emerald)' }} />
           </div>
-          <span className="stat-value" style={{ color: 'var(--emerald)' }}>{lowRiskCount}</span>
+          <span style={{ fontSize: 32, fontWeight: 700, color: 'var(--emerald)', fontFamily: 'IBM Plex Sans, sans-serif', lineHeight: 1 }}>{lowRiskCount}</span>
+          <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Normal physiological range</span>
         </div>
       </div>
 
       {/* Main Content: Patient Queue + Appointments */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 360px', gap: 20 }}>
         {/* Patient Queue */}
-        <div className="card card-accent-emerald" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="card" style={{ padding: '22px 24px', background: 'var(--bg-surface)', border: '1px solid var(--bg-border)', borderRadius: 'var(--radius-lg)', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div className="section-title" style={{ marginBottom: 0 }}>Patient Overview</div>
             <button className="btn btn-ghost btn-xs" onClick={() => navigate('/patient-queue')}>

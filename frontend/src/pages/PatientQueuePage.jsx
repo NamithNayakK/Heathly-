@@ -79,71 +79,78 @@ export default function PatientQueuePage() {
 
       {/* Table */}
       {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[1, 2, 3, 4].map(i => <div key={i} className="skeleton" style={{ height: 56, borderRadius: 10 }} />)}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {[1, 2, 3, 4].map(i => <div key={i} className="skeleton" style={{ height: 68, borderRadius: 14 }} />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-          {searchTerm ? 'No patients match your search.' : 'No patients currently flagged for review. All clear.'}
+        <div className="card-editorial-dark" style={{ textAlign: 'center', padding: '64px 20px', color: 'var(--text-muted)' }}>
+          <div style={{ fontSize: 16, fontWeight: 600, color: '#FFFFFF', marginBottom: 4 }}>
+            {searchTerm ? 'No matching patients found' : 'Triage Queue Clear'}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            {searchTerm ? 'Try adjusting your search criteria.' : 'All registered patients are currently within baseline thresholds.'}
+          </div>
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="bento-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--bg-border)' }}>
           <table className="data-table">
             <thead>
               <tr>
-                <th>Patient</th>
-                <th>Risk Level</th>
-                <th>PHQ-9 Score</th>
-                <th>Last Assessment</th>
+                <th style={{ padding: '16px 20px' }}>Patient Profile</th>
+                <th>Stratified Risk</th>
+                <th>PHQ-9 Index</th>
+                <th>Last Interaction</th>
                 <th>Review Status</th>
-                <th>Actions</th>
+                <th style={{ textAlign: 'right', paddingRight: 20 }}>Clinical Action</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(patient => (
-                <tr key={patient.id}>
-                  {/* Patient name + avatar */}
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <tr key={patient.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  {/* Patient Profile */}
+                  <td style={{ padding: '18px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div style={{
-                        width: 28, height: 28, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, var(--emerald), var(--blue))',
+                        width: 36, height: 36, borderRadius: 10,
+                        background: 'rgba(29, 107, 95, 0.25)',
+                        border: '1px solid rgba(29, 107, 95, 0.4)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0
+                        fontSize: 13, fontWeight: 700, color: 'var(--teal)', flexShrink: 0
                       }}>
                         {patient.full_name?.charAt(0)?.toUpperCase()}
                       </div>
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12 }}>{patient.full_name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 600, color: '#FFFFFF', fontSize: 14 }}>{patient.full_name}</span>
                           {patient.is_unassigned_fallback && (
-                            <span className="badge badge-rose" style={{ fontSize: 9 }} title="Unassigned patient shown due to High-Risk fallback alert">
-                              🚨 Urgent Unassigned
+                            <span className="badge badge-rose" style={{ fontSize: 9 }}>
+                              Urgent
                             </span>
                           )}
                         </div>
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono' }}>{patient.email}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'IBM Plex Mono', marginTop: 2 }}>
+                          {patient.email}
+                        </div>
                       </div>
-
                     </div>
                   </td>
 
-                  {/* Risk level badge */}
+                  {/* Risk State */}
                   <td>{riskBadge(patient.latest_risk_level)}</td>
 
-                  {/* PHQ-9 score */}
-                  <td style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'IBM Plex Mono' }}>
-                    {patient.latest_score != null ? `${patient.latest_score}/27` : '—'}
+                  {/* PHQ-9 Score */}
+                  <td style={{ fontWeight: 600, color: '#FFFFFF', fontFamily: 'IBM Plex Mono', fontSize: 14 }}>
+                    {patient.latest_score != null ? `${patient.latest_score} / 27` : '—'}
                   </td>
 
-                  {/* Last assessment date */}
-                  <td style={{ fontSize: 10, fontFamily: 'IBM Plex Mono', color: 'var(--text-muted)' }}>
+                  {/* Last Assessment */}
+                  <td style={{ fontSize: 11, fontFamily: 'IBM Plex Mono', color: 'var(--text-muted)' }}>
                     {patient.last_assessment_date
-                      ? new Date(patient.last_assessment_date).toLocaleDateString()
+                      ? new Date(patient.last_assessment_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
                       : '—'}
                   </td>
 
-                  {/* Needs review badge */}
+                  {/* Review Status */}
                   <td>
                     {patient.needs_review ? (
                       <span className="badge badge-amber" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -155,15 +162,16 @@ export default function PatientQueuePage() {
                     )}
                   </td>
 
-                  {/* Action button */}
-                  <td>
+                  {/* Action */}
+                  <td style={{ textAlign: 'right', paddingRight: 20 }}>
                     <button
                       className="btn btn-primary btn-xs"
                       onClick={() => navigate(`/patient-detail?patient=${patient.id}`)}
+                      style={{ background: 'var(--brand)', color: '#FFFFFF', borderColor: 'transparent', padding: '6px 14px' }}
                     >
-                      <Eye style={{ width: 11, height: 11 }} />
-                      View Detail
-                      <ChevronRight style={{ width: 10, height: 10 }} />
+                      <Eye style={{ width: 12, height: 12 }} />
+                      Open Dossier
+                      <ChevronRight style={{ width: 11, height: 11 }} />
                     </button>
                   </td>
                 </tr>
@@ -175,3 +183,4 @@ export default function PatientQueuePage() {
     </div>
   );
 }
+

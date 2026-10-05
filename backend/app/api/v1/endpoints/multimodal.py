@@ -649,15 +649,16 @@ async def get_multimodal_dashboard(
 
     if latest_sensor:
         # Sensor biometrics: Stress 0.0 = 100%, Stress 1.0 = 0%
-        sensor_score_val = max(0.0, min(100.0, (1.0 - latest_sensor.stress_index) * 100.0))
+        stress_val = latest_sensor.stress_index if latest_sensor.stress_index is not None else 0.35
+        sensor_score_val = max(0.0, min(100.0, (1.0 - stress_val) * 100.0))
         mode_scores["sensor"] = sensor_score_val
         
         att_weight = attention_weights.get("sensor", 0.0)
-        contrib = "negative_influence" if latest_sensor.stress_index >= 0.5 else "positive_influence"
-        reason = f"LSTM Stress index is {latest_sensor.stress_index:.2f} (Sub-index: {sensor_score_val:.1f}%). Attention weight = {att_weight:.2f}."
+        contrib = "negative_influence" if stress_val >= 0.5 else "positive_influence"
+        reason = f"LSTM Stress index is {stress_val:.2f} (Sub-index: {sensor_score_val:.1f}%). Attention weight = {att_weight:.2f}."
         explainability.append(ExplainabilityFactor(modality="sensor_wearable_analysis", weight=att_weight, contribution_direction=contrib, reason=reason))
         
-        if latest_sensor.stress_index >= 0.7:
+        if stress_val >= 0.7:
             alert_flags.append("Physiological Anomaly Alert: Severe Autonomic Stress")
             recommendations.append("Autonomic nervous markers show extreme arousal. Try resonant deep-breathing exercises.")
 
@@ -715,7 +716,8 @@ async def get_multimodal_dashboard(
 
     # Cross-Modal Safety Fusion Logic
     if latest_phq9 and latest_sensor:
-        if latest_phq9.score >= 15 and latest_sensor.stress_index >= 0.65:
+        sensor_stress = latest_sensor.stress_index if latest_sensor.stress_index is not None else 0.0
+        if latest_phq9.score >= 15 and sensor_stress >= 0.65:
             alert_flags.append("CRITICAL: Autonomic-Clinical Co-Stress Concurrence")
             recommendations.append("Combined metrics confirm autonomic nervous distress under high clinical loads. Urgent medical check-in suggested.")
 

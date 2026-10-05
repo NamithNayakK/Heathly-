@@ -5,14 +5,16 @@ from app.models.user import User
 from app.models.health_report import HealthReport
 from app.models.sensor_data import SensorData
 from app.models.session_analytics import SessionAnalytics
-from app.models.wifi_sensor import SensorReading, DailyAggregate, RiskHistory
+from app.models.wifi_sensor import SensorReading, DailyAggregate, RiskHistory, MobileGpsSession, MobileActivitySession, MobileSensorFeatures
 from app.models.mood_log import MoodLog
 from app.models.practitioner_registry import VerifiedPractitionerRegistry
 from app.models.patient_assignment import PatientAssignment
+from app.models.video_call import CallRequest
 
 __all__ = [
     "User", "PHQ9Assessment", "ChatMessage", "ForumPost", "HealthReport",
     "SensorData", "SessionAnalytics", "SensorReading", "DailyAggregate", "RiskHistory",
-    "MoodLog", "VerifiedPractitionerRegistry", "PatientAssignment",
+    "MoodLog", "VerifiedPractitionerRegistry", "PatientAssignment", "CallRequest",
+    "MobileGpsSession", "MobileActivitySession", "MobileSensorFeatures",
 ]
 
